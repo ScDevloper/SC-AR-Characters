@@ -5,7 +5,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { Maximize2, Pause, Play, RotateCcw, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { createPalette, type CharacterRig } from "@/components/characters/kit";
+import { addBrandBadge, createPalette, type CharacterRig } from "@/components/characters/kit";
 import { buildHumanoid } from "@/components/characters/humanoid";
 import {
   buildArm,
@@ -135,6 +135,11 @@ export function RobotScene({ variant, arMode = false }: { variant: CharacterId; 
     const rig = createCharacter(scene, variant);
     const cameraHome = rig.frame?.camera ?? DEFAULT_CAMERA;
     const targetHome = rig.frame?.target ?? DEFAULT_TARGET;
+    const floatingBrandHome = new THREE.Vector3(0, targetHome[1] + 2.75, -0.35);
+    const floatingBrand = addBrandBadge(scene, {
+      position: [floatingBrandHome.x, floatingBrandHome.y, floatingBrandHome.z],
+      size: [3.15, 0.98],
+    });
     const clock = new THREE.Clock();
     animationRef.current.start = performance.now();
 
@@ -175,6 +180,10 @@ export function RobotScene({ variant, arMode = false }: { variant: CharacterId; 
       floorRing.rotation.z -= delta * 0.15;
       ringMaterial.opacity = 0.2 + Math.sin(t * 2.4) * 0.08;
       controls.update();
+      if (floatingBrand) {
+        floatingBrand.position.y = floatingBrandHome.y + Math.sin(t * 1.15) * 0.07;
+        floatingBrand.lookAt(camera.position);
+      }
       renderer.render(scene, camera);
     };
     animate();
