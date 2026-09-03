@@ -34,7 +34,10 @@ export default function QrSheetPage() {
 
   // Default to wherever the app is actually being served from.
   useEffect(() => {
-    setBaseUrl(window.location.origin);
+    // On GitHub Pages the app lives under /SC-AR-Characters/, so the origin
+    // alone would generate codes pointing at the wrong path.
+    const base = import.meta.env.BASE_URL.replace(/\/+$/, "");
+    setBaseUrl(`${window.location.origin}${base}`);
   }, []);
 
   const cards = useMemo(() => {

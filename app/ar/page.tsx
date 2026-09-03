@@ -301,11 +301,12 @@ export default function ArPage() {
               ))}
             </div>
 
-            {!STANDALONE && (
-              <a href="/qr" className="mt-3 inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-cyan-200">
-                <QrCode className="size-3.5" /> Open printable QR sheet
-              </a>
-            )}
+            <a
+              href={STANDALONE ? "#/qr" : "/qr"}
+              className="mt-3 inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-cyan-200"
+            >
+              <QrCode className="size-3.5" /> Open printable QR sheet
+            </a>
           </div>
         </div>
       </section>
