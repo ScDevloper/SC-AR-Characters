@@ -66,7 +66,7 @@ export function RobotScene({ variant, arMode = false }: { variant: CharacterId; 
     const scene = new THREE.Scene();
     scene.fog = arMode ? null : new THREE.FogExp2(0x071018, 0.035);
 
-    const camera = new THREE.PerspectiveCamera(34, 1, 0.1, 100);
+    const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 100);
 
     const renderer = new THREE.WebGLRenderer({
       antialias: true,
@@ -135,10 +135,18 @@ export function RobotScene({ variant, arMode = false }: { variant: CharacterId; 
     const rig = createCharacter(scene, variant);
     const cameraHome = rig.frame?.camera ?? DEFAULT_CAMERA;
     const targetHome = rig.frame?.target ?? DEFAULT_TARGET;
-    const floatingBrandHome = new THREE.Vector3(0, targetHome[1] + 2.75, -0.35);
+    rig.rest();
+    rig.root.updateMatrixWorld(true);
+    const characterBounds = new THREE.Box3().setFromObject(rig.root);
+    const characterTop = Number.isFinite(characterBounds.max.y)
+      ? characterBounds.max.y
+      : targetHome[1] + 2;
+    const floatingBrandHome = new THREE.Vector3(0, characterTop + 1.05, -0.3);
     const floatingBrand = addBrandBadge(scene, {
       position: [floatingBrandHome.x, floatingBrandHome.y, floatingBrandHome.z],
-      size: [3.15, 0.98],
+      size: [3.05, 0.95],
+      depth: 0.2,
+      accent: variantInfo.accent,
     });
     const clock = new THREE.Clock();
     animationRef.current.start = performance.now();
@@ -181,7 +189,7 @@ export function RobotScene({ variant, arMode = false }: { variant: CharacterId; 
       ringMaterial.opacity = 0.2 + Math.sin(t * 2.4) * 0.08;
       controls.update();
       if (floatingBrand) {
-        floatingBrand.position.y = floatingBrandHome.y + Math.sin(t * 1.15) * 0.07;
+        floatingBrand.position.y = floatingBrandHome.y + Math.sin(t * 1.15) * 0.045;
         floatingBrand.lookAt(camera.position);
       }
       renderer.render(scene, camera);

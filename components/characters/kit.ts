@@ -26,6 +26,9 @@ type BrandBadgeOptions = {
   position: [number, number, number];
   rotation?: [number, number, number];
   size?: [number, number];
+  /** Adds a metallic housing and illuminated frame for a freestanding 3D sign. */
+  depth?: number;
+  accent?: number;
 };
 
 /**
@@ -109,11 +112,70 @@ export function addBrandBadge(parent: THREE.Object3D, options: BrandBadgeOptions
       toneMapped: false,
     }),
   );
-  badge.position.set(...options.position);
-  badge.rotation.set(...(options.rotation ?? [0, 0, 0]));
   badge.renderOrder = 3;
-  parent.add(badge);
-  return badge;
+
+  if (!options.depth) {
+    badge.position.set(...options.position);
+    badge.rotation.set(...(options.rotation ?? [0, 0, 0]));
+    parent.add(badge);
+    return badge;
+  }
+
+  const sign = new THREE.Group();
+  const depth = options.depth;
+  const accent = options.accent ?? 0x38d9ff;
+  const shell = new THREE.MeshStandardMaterial({
+    color: 0x101a25,
+    metalness: 0.88,
+    roughness: 0.2,
+  });
+  const neon = new THREE.MeshStandardMaterial({
+    color: accent,
+    emissive: accent,
+    emissiveIntensity: 2.5,
+    metalness: 0.38,
+    roughness: 0.18,
+  });
+
+  const backing = new THREE.Mesh(
+    new THREE.BoxGeometry(width + 0.2, height + 0.2, depth),
+    shell,
+  );
+  backing.castShadow = true;
+  backing.receiveShadow = true;
+  sign.add(backing);
+
+  const frontZ = depth / 2 + 0.012;
+  badge.position.z = frontZ;
+  sign.add(badge);
+
+  const railDepth = depth + 0.055;
+  const horizontalRail = new THREE.BoxGeometry(width + 0.22, 0.055, railDepth);
+  const verticalRail = new THREE.BoxGeometry(0.055, height + 0.11, railDepth);
+  for (const y of [-(height + 0.145) / 2, (height + 0.145) / 2]) {
+    const rail = new THREE.Mesh(horizontalRail, neon);
+    rail.position.y = y;
+    sign.add(rail);
+  }
+  for (const x of [-(width + 0.145) / 2, (width + 0.145) / 2]) {
+    const rail = new THREE.Mesh(verticalRail, neon);
+    rail.position.x = x;
+    sign.add(rail);
+  }
+
+  const boltGeometry = new THREE.SphereGeometry(0.035, 16, 12);
+  for (const x of [-width / 2 + 0.07, width / 2 - 0.07]) {
+    for (const y of [-height / 2 + 0.07, height / 2 - 0.07]) {
+      const bolt = new THREE.Mesh(boltGeometry, neon);
+      bolt.position.set(x, y, frontZ + 0.025);
+      sign.add(bolt);
+    }
+  }
+
+  sign.position.set(...options.position);
+  sign.rotation.set(...(options.rotation ?? [0, 0, 0]));
+  parent.add(sign);
+  return sign;
 }
 
 export function createPalette(accent: number, secondary: number) {
