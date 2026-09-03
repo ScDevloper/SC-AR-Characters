@@ -9,6 +9,7 @@
     "install:ci": "bash scripts/install-ci.sh",
     "dev": "node scripts/run-with-wrangler-log.mjs node_modules/vite/bin/vite.js",
     "build": "bash scripts/build-verified.sh",
+    "build:pages": "vite build --config vite.github-pages.config.ts",
     "start": "node scripts/run-with-wrangler-log.mjs node_modules/vinext/dist/cli.js start",
     "test": "npm run build && node --test tests/*.test.mjs",
     "lint": "bash scripts/sites-env.sh -- eslint . --ignore-pattern dist --ignore-pattern .next",

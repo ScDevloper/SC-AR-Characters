@@ -133,7 +133,7 @@ export default function ArPage() {
           <ArrowLeft className="size-4" /> Characters
         </a>
         <div className="flex items-center gap-2 rounded-full border border-white/15 bg-slate-950/65 px-3 py-2 backdrop-blur-xl">
-          <img src="/sc-printing-logo.png" alt="SC Printing" className="h-7 w-7 rounded-md bg-white object-contain p-0.5" />
+          <img src={`${import.meta.env.BASE_URL}sc-printing-logo.png`} alt="SC Printing" className="h-7 w-7 rounded-md bg-white object-contain p-0.5" />
           <span className="hidden text-xs font-semibold sm:inline">Annual Get-Together · AR</span>
         </div>
       </header>

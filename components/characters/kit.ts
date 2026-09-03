@@ -99,7 +99,7 @@ export function addBrandBadge(parent: THREE.Object3D, options: BrandBadgeOptions
     draw(image);
     texture.needsUpdate = true;
   };
-  image.src = "/sc-printing-logo.png";
+  image.src = `${import.meta.env.BASE_URL}sc-printing-logo.png`;
 
   const [width, height] = options.size ?? [1.25, 0.39];
   const badge = new THREE.Mesh(

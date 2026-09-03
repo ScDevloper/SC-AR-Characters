@@ -1,0 +1,4 @@
+.github-pages-ar header > a,
+.github-pages-ar a[href="/qr"] {
+  display: none;
+}
