@@ -52,7 +52,15 @@ function createCharacter(scene: THREE.Scene, id: CharacterId): CharacterRig {
   }
 }
 
-export function RobotScene({ variant, arMode = false }: { variant: CharacterId; arMode?: boolean }) {
+export function RobotScene({
+  variant,
+  arMode = false,
+  minimal = false,
+}: {
+  variant: CharacterId;
+  arMode?: boolean;
+  minimal?: boolean;
+}) {
   const variantInfo = CHARACTERS[variant];
   const mountRef = useRef<HTMLDivElement>(null);
   const animationRef = useRef({ dancing: true, start: 0 });
@@ -234,7 +242,7 @@ export function RobotScene({ variant, arMode = false }: { variant: CharacterId; 
   };
 
   return (
-    <section className={`robot-stage ${arMode ? "robot-stage--ar" : ""}`} aria-label={arMode ? "Augmented reality character viewer" : "Interactive 3D character viewer"}>
+    <section className={`robot-stage ${arMode ? "robot-stage--ar" : ""} ${minimal ? "robot-stage--minimal" : ""}`} aria-label={arMode ? "Augmented reality character viewer" : "Interactive 3D character viewer"}>
       <div ref={mountRef} className="absolute inset-0" />
 
       <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-4 sm:p-6">
