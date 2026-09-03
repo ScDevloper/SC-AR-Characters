@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { anchorFromPoints, type MarkerAnchor } from "@/components/characters/anchor";
 import { RobotScene } from "@/components/robot-scene";
 import {
   CHARACTERS,
@@ -53,6 +54,7 @@ export default function ArPage() {
   const [message, setMessage] = useState("Scan a character QR or choose one below.");
   const glRef = useRef<HTMLCanvasElement | null>(null);
   const [photo, setPhoto] = useState<string | null>(null);
+  const anchorRef = useRef<MarkerAnchor | null>(null);
 
   // Must be stable: RobotScene lists it as an effect dependency, so a new
   // function identity each render would tear down and rebuild the scene.
@@ -90,9 +92,11 @@ export default function ArPage() {
 
     try {
       const { BrowserQRCodeReader } = await import("@zxing/browser");
+      // Scan continuously rather than once: every decode refreshes the
+      // marker position, which is what keeps the character on the code.
       const reader = new BrowserQRCodeReader(undefined, {
-        delayBetweenScanAttempts: 300,
-        delayBetweenScanSuccess: 900,
+        delayBetweenScanAttempts: 40,
+        delayBetweenScanSuccess: 40,
       });
 
       const controls = await reader.decodeFromConstraints(
@@ -106,12 +110,29 @@ export default function ArPage() {
         },
         videoRef.current,
         (result) => {
-          if (!result || handledRef.current) return;
+          if (!result) return;
           const id = characterFromQr(result.getText());
           if (!id) {
-            setMessage("That QR is not an SC character code. Try another one.");
+            if (!handledRef.current) {
+              setMessage("That QR is not an SC character code. Try another one.");
+            }
             return;
           }
+
+          // Track on every decode, including after the character is chosen.
+          const video = videoRef.current;
+          const gl = glRef.current;
+          if (video && gl) {
+            const reading = anchorFromPoints(
+              result.getResultPoints(),
+              video,
+              gl.clientWidth,
+              gl.clientHeight,
+            );
+            if (reading) anchorRef.current = reading;
+          }
+
+          if (handledRef.current) return;
           handledRef.current = true;
           selectCharacter(id);
         },
@@ -244,7 +265,7 @@ export default function ArPage() {
 
         {cameraActive && selected && (
           <div className="absolute inset-0 z-10">
-            <RobotScene variant={selected} arMode onCanvasReady={handleCanvas} />
+            <RobotScene variant={selected} arMode onCanvasReady={handleCanvas} anchorRef={anchorRef} />
           </div>
         )}
 
@@ -288,25 +309,22 @@ export default function ArPage() {
               </div>
             )}
 
-            <div className="mt-4 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {CHARACTER_IDS.map((id) => (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => selectCharacter(id)}
-                  className={`shrink-0 rounded-full border px-3 py-1.5 text-xs transition ${selected === id ? "border-cyan-300 bg-cyan-300/15 text-cyan-100" : "border-white/15 bg-slate-950/55 text-slate-300"}`}
-                >
-                  {CHARACTERS[id].shortName}
-                </button>
-              ))}
-            </div>
+            {cameraState === "error" && (
+              <div className="mt-4 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {CHARACTER_IDS.map((id) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => selectCharacter(id)}
+                    className={`shrink-0 rounded-full border px-3 py-1.5 text-xs transition ${selected === id ? "border-cyan-300 bg-cyan-300/15 text-cyan-100" : "border-white/15 bg-slate-950/55 text-slate-300"}`}
+                  >
+                    {CHARACTERS[id].shortName}
+                  </button>
+                ))}
+              </div>
+            )}
 
-            <a
-              href={STANDALONE ? "#/qr" : "/qr"}
-              className="mt-3 inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-cyan-200"
-            >
-              <QrCode className="size-3.5" /> Open printable QR sheet
-            </a>
+
           </div>
         </div>
       </section>

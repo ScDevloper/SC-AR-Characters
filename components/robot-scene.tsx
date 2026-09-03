@@ -28,6 +28,11 @@ import {
 } from "@/components/characters/realism";
 import { createPostStack, type PostStack } from "@/components/render/post";
 import { CHARACTERS, CHARACTER_IDS, type CharacterId } from "@/components/characters/registry";
+import {
+  ANCHOR_DISTANCE_K,
+  ANCHOR_GRACE_MS,
+  type MarkerAnchor,
+} from "@/components/characters/anchor";
 
 // Re-exported so existing imports (`ROBOT_VARIANTS`, `RobotVariant`) keep working.
 export {
@@ -78,6 +83,7 @@ export function RobotScene({
   minimal = false,
   realistic = true,
   onCanvasReady,
+  anchorRef,
 }: {
   variant: CharacterId;
   arMode?: boolean;
@@ -86,6 +92,12 @@ export function RobotScene({
   realistic?: boolean;
   /** Receives the WebGL canvas so the parent can composite it into a photo. */
   onCanvasReady?: (canvas: HTMLCanvasElement | null) => void;
+  /**
+   * Live marker reading. A ref rather than a prop so scanner updates never
+   * re-render this component - a new anchor object every frame would tear the
+   * whole three.js scene down and rebuild it.
+   */
+  anchorRef?: { current: MarkerAnchor | null };
 }) {
   const variantInfo = CHARACTERS[variant];
   const mountRef = useRef<HTMLDivElement>(null);
@@ -151,6 +163,15 @@ export function RobotScene({
     pinkRim.position.set(5, 2.5, -1);
     scene.add(pinkRim);
 
+    // In AR the character hangs off an anchor group so it can be driven to
+    // wherever the QR code appears in frame. `stand` lifts the model so its
+    // feet, not its centre, sit on the anchor point.
+    const anchorGroup = new THREE.Group();
+    const stand = new THREE.Group();
+    stand.position.y = 0.94;
+    anchorGroup.add(stand);
+    if (arMode) scene.add(anchorGroup);
+
     const floor = new THREE.Mesh(
       new THREE.CircleGeometry(6.6, 96),
       arMode
@@ -164,7 +185,8 @@ export function RobotScene({
     floor.rotation.x = -Math.PI / 2;
     floor.position.y = -0.94;
     floor.receiveShadow = true;
-    scene.add(floor);
+    if (arMode) stand.add(floor);
+    else scene.add(floor);
 
     const ringMaterial = new THREE.MeshBasicMaterial({
       color: variantInfo.accent,
@@ -174,9 +196,11 @@ export function RobotScene({
     const floorRing = new THREE.Mesh(new THREE.RingGeometry(2.1, 2.13, 96), ringMaterial);
     floorRing.rotation.x = -Math.PI / 2;
     floorRing.position.y = -0.925;
-    scene.add(floorRing);
+    if (arMode) stand.add(floorRing);
+    else scene.add(floorRing);
 
     const rig = createCharacter(scene, variant);
+    if (arMode) stand.add(rig.root);
     if (realistic) enhanceMaterials(rig.root, CHARACTER_IDS.indexOf(variant) + 1);
     const cameraHome = rig.frame?.camera ?? DEFAULT_CAMERA;
     const targetHome = rig.frame?.target ?? DEFAULT_TARGET;
@@ -193,6 +217,7 @@ export function RobotScene({
       depth: 0.2,
       accent: variantInfo.accent,
     });
+    const anchorTarget = new THREE.Vector3();
     const clock = new THREE.Clock();
     animationRef.current.start = performance.now();
 
@@ -251,6 +276,34 @@ export function RobotScene({
         floatingBrand.position.y = floatingBrandHome.y + Math.sin(t * 1.15) * 0.045;
         floatingBrand.lookAt(camera.position);
       }
+      if (arMode && anchorRef) {
+        const anchor = anchorRef.current;
+        if (anchor && performance.now() - anchor.at < ANCHOR_GRACE_MS) {
+          // Apparent marker size stands in for distance: a code filling more
+          // of the frame is closer, so the character is placed nearer.
+          const distance = THREE.MathUtils.clamp(
+            ANCHOR_DISTANCE_K / Math.max(anchor.scale, 0.02),
+            5,
+            30,
+          );
+          anchorTarget
+            .set(anchor.x * 2 - 1, -(anchor.y * 2 - 1), 0.5)
+            .unproject(camera)
+            .sub(camera.position)
+            .normalize()
+            .multiplyScalar(distance)
+            .add(camera.position);
+
+          // ZXing decodes a handful of times a second, not once per frame, so
+          // everything is eased - without this the character teleports.
+          anchorGroup.position.lerp(anchorTarget, 0.16);
+          anchorGroup.rotation.z += (-anchor.roll - anchorGroup.rotation.z) * 0.12;
+          anchorGroup.visible = true;
+        } else if (anchor) {
+          anchorGroup.visible = false;
+        }
+      }
+
       if (post) post.render(delta);
       else renderer.render(scene, camera);
     };
@@ -274,7 +327,7 @@ export function RobotScene({
       onCanvasReady?.(null);
       resetRef.current = null;
     };
-  }, [arMode, realistic, variant, variantInfo.accent, variantInfo.secondary, onCanvasReady]);
+  }, [arMode, realistic, variant, variantInfo.accent, variantInfo.secondary, onCanvasReady, anchorRef]);
 
   const toggleDance = () => {
     const next = !dancing;
