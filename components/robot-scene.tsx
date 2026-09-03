@@ -15,6 +15,18 @@ import {
   buildRover,
   buildStack,
 } from "@/components/characters/bodies";
+import {
+  buildCrawler,
+  buildDrop,
+  buildSwarm,
+  buildTube,
+} from "@/components/characters/bodies-organic";
+import {
+  attachEnvironment,
+  enhanceMaterials,
+  upgradeShadows,
+} from "@/components/characters/realism";
+import { createPostStack, type PostStack } from "@/components/render/post";
 import { CHARACTERS, CHARACTER_IDS, type CharacterId } from "@/components/characters/registry";
 
 // Re-exported so existing imports (`ROBOT_VARIANTS`, `RobotVariant`) keep working.
@@ -46,6 +58,14 @@ function createCharacter(scene: THREE.Scene, id: CharacterId): CharacterRig {
       return buildArm(scene, palette);
     case "quad":
       return buildQuad(scene, palette);
+    case "tube":
+      return buildTube(scene, palette);
+    case "crawler":
+      return buildCrawler(scene, palette);
+    case "drop":
+      return buildDrop(scene, palette);
+    case "swarm":
+      return buildSwarm(scene, palette);
     case "humanoid":
     default:
       return buildHumanoid(scene, palette, id);
@@ -56,10 +76,16 @@ export function RobotScene({
   variant,
   arMode = false,
   minimal = false,
+  realistic = true,
+  onCanvasReady,
 }: {
   variant: CharacterId;
   arMode?: boolean;
   minimal?: boolean;
+  /** Environment lighting, PBR tuning and (studio only) bloom + AO. */
+  realistic?: boolean;
+  /** Receives the WebGL canvas so the parent can composite it into a photo. */
+  onCanvasReady?: (canvas: HTMLCanvasElement | null) => void;
 }) {
   const variantInfo = CHARACTERS[variant];
   const mountRef = useRef<HTMLDivElement>(null);
@@ -79,6 +105,9 @@ export function RobotScene({
     const renderer = new THREE.WebGLRenderer({
       antialias: true,
       alpha: true,
+      // Without this the drawing buffer is cleared after compositing and any
+      // readback (toDataURL / drawImage) comes out black.
+      preserveDrawingBuffer: arMode,
       powerPreference: "high-performance",
     });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -88,6 +117,7 @@ export function RobotScene({
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     mount.appendChild(renderer.domElement);
+    onCanvasReady?.(renderer.domElement);
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
@@ -107,6 +137,12 @@ export function RobotScene({
     key.shadow.camera.top = 8;
     key.shadow.camera.bottom = -3;
     scene.add(key);
+
+    let releaseEnvironment: (() => void) | null = null;
+    if (realistic) {
+      releaseEnvironment = attachEnvironment(renderer, scene, arMode ? 1.0 : 0.85);
+      upgradeShadows(key);
+    }
 
     const rim = new THREE.PointLight(variantInfo.accent, 22, 18, 2);
     rim.position.set(-5, 4, -2);
@@ -141,6 +177,7 @@ export function RobotScene({
     scene.add(floorRing);
 
     const rig = createCharacter(scene, variant);
+    if (realistic) enhanceMaterials(rig.root, CHARACTER_IDS.indexOf(variant) + 1);
     const cameraHome = rig.frame?.camera ?? DEFAULT_CAMERA;
     const targetHome = rig.frame?.target ?? DEFAULT_TARGET;
     rig.rest();
@@ -168,9 +205,23 @@ export function RobotScene({
     resetPose();
     resetRef.current = resetPose;
 
+    // Bloom and AO render through an opaque target, which would destroy the
+    // alpha that lets the camera feed show through - studio mode only.
+    let post: PostStack | null = null;
+    if (realistic && !arMode) {
+      post = createPostStack(
+        renderer,
+        scene,
+        camera,
+        Math.max(mount.clientWidth, 1),
+        Math.max(mount.clientHeight, 1),
+      );
+    }
+
     const resize = () => {
       const { clientWidth, clientHeight } = mount;
       renderer.setSize(clientWidth, clientHeight, false);
+      post?.setSize(Math.max(clientWidth, 1), Math.max(clientHeight, 1));
       camera.aspect = clientWidth / Math.max(clientHeight, 1);
       camera.updateProjectionMatrix();
     };
@@ -200,7 +251,8 @@ export function RobotScene({
         floatingBrand.position.y = floatingBrandHome.y + Math.sin(t * 1.15) * 0.045;
         floatingBrand.lookAt(camera.position);
       }
-      renderer.render(scene, camera);
+      if (post) post.render(delta);
+      else renderer.render(scene, camera);
     };
     animate();
 
@@ -208,6 +260,8 @@ export function RobotScene({
       cancelAnimationFrame(frame);
       observer.disconnect();
       controls.dispose();
+      post?.dispose();
+      releaseEnvironment?.();
       renderer.dispose();
       scene.traverse((object) => {
         if (object instanceof THREE.Mesh) {
@@ -217,9 +271,10 @@ export function RobotScene({
         }
       });
       renderer.domElement.remove();
+      onCanvasReady?.(null);
       resetRef.current = null;
     };
-  }, [arMode, variant, variantInfo.accent, variantInfo.secondary]);
+  }, [arMode, realistic, variant, variantInfo.accent, variantInfo.secondary, onCanvasReady]);
 
   const toggleDance = () => {
     const next = !dancing;

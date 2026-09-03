@@ -1,18 +1,35 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { IScannerControls } from "@zxing/browser";
-import { ArrowLeft, Camera, CameraOff, QrCode, RefreshCcw, ScanLine } from "lucide-react";
+import {
+  ArrowLeft,
+  Camera,
+  CameraOff,
+  Download,
+  QrCode,
+  RefreshCcw,
+  ScanLine,
+  Share2,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { RobotScene } from "@/components/robot-scene";
 import {
   CHARACTERS,
   CHARACTER_IDS,
+  hex,
   isCharacterId,
   type CharacterId,
 } from "@/components/characters/registry";
 
 type CameraState = "ready" | "starting" | "scanning" | "placed" | "error";
+
+// The GitHub Pages bundle mounts this page alone under /SC-AR-Characters/,
+// so "/" and "/qr" do not exist there. Hide those links when we are not at
+// the site root rather than shipping links that 404.
+const BASE = import.meta.env.BASE_URL;
+const STANDALONE = BASE !== "/";
 
 function characterFromQr(value: string): CharacterId | null {
   const raw = value.trim();
@@ -34,6 +51,14 @@ export default function ArPage() {
   const [selected, setSelected] = useState<CharacterId | null>(null);
   const [cameraState, setCameraState] = useState<CameraState>("ready");
   const [message, setMessage] = useState("Scan a character QR or choose one below.");
+  const glRef = useRef<HTMLCanvasElement | null>(null);
+  const [photo, setPhoto] = useState<string | null>(null);
+
+  // Must be stable: RobotScene lists it as an effect dependency, so a new
+  // function identity each render would tear down and rebuild the scene.
+  const handleCanvas = useCallback((canvas: HTMLCanvasElement | null) => {
+    glRef.current = canvas;
+  }, []);
 
   useEffect(() => {
     const model = new URLSearchParams(window.location.search).get("model");
@@ -124,14 +149,89 @@ export default function ArPage() {
     setMessage(selected ? `${CHARACTERS[selected].name} is ready for AR.` : "Camera stopped.");
   };
 
+  const capturePhoto = () => {
+    const video = videoRef.current;
+    const gl = glRef.current;
+    if (!gl || !selected) return;
+
+    const scale = Math.min(window.devicePixelRatio, 2);
+    const width = Math.round(gl.clientWidth * scale);
+    const height = Math.round(gl.clientHeight * scale);
+    if (!width || !height) return;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    if (video && video.videoWidth > 0) {
+      // Cover-fit the camera frame so the photo matches what is on screen.
+      const videoAspect = video.videoWidth / video.videoHeight;
+      const boxAspect = width / height;
+      const drawWidth = videoAspect > boxAspect ? height * videoAspect : width;
+      const drawHeight = videoAspect > boxAspect ? height : width / videoAspect;
+      ctx.drawImage(video, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight);
+    } else {
+      ctx.fillStyle = "#050a0f";
+      ctx.fillRect(0, 0, width, height);
+    }
+
+    ctx.drawImage(gl, 0, 0, width, height);
+
+    const character = CHARACTERS[selected];
+    const strip = 92 * scale;
+    ctx.fillStyle = "rgba(5, 10, 15, 0.74)";
+    ctx.fillRect(0, height - strip, width, strip);
+    ctx.fillStyle = hex(character.accent);
+    ctx.fillRect(0, height - strip, width, 4 * scale);
+    ctx.fillStyle = "#ffffff";
+    ctx.font = `600 ${26 * scale}px system-ui, sans-serif`;
+    ctx.fillText(character.name, 24 * scale, height - 48 * scale);
+    ctx.fillStyle = "#94a3b8";
+    ctx.font = `${18 * scale}px system-ui, sans-serif`;
+    ctx.fillText(`${character.code} · SC Printing`, 24 * scale, height - 20 * scale);
+
+    setPhoto(canvas.toDataURL("image/jpeg", 0.92));
+  };
+
+  const savePhoto = () => {
+    if (!photo || !selected) return;
+    const link = document.createElement("a");
+    link.href = photo;
+    link.download = `sc-${selected}-${Date.now()}.jpg`;
+    link.click();
+  };
+
+  const sharePhoto = async () => {
+    if (!photo || !selected) return;
+    try {
+      const blob = await (await fetch(photo)).blob();
+      const file = new File([blob], `sc-${selected}.jpg`, { type: "image/jpeg" });
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title: `${CHARACTERS[selected].name} · SC Printing` });
+        return;
+      }
+    } catch {
+      // Share sheet dismissed or unsupported - fall back to a download.
+    }
+    savePhoto();
+  };
+
   const cameraActive = cameraState === "scanning" || cameraState === "placed";
 
   return (
     <main className="min-h-dvh bg-slate-950 text-white">
       <header className="absolute inset-x-0 top-0 z-30 flex items-center justify-between gap-3 p-4 sm:p-6">
-        <a href="/" className="flex items-center gap-2 rounded-full border border-white/15 bg-slate-950/65 px-3 py-2 text-sm text-white backdrop-blur-xl">
-          <ArrowLeft className="size-4" /> Characters
-        </a>
+        {STANDALONE ? (
+          <span className="flex items-center gap-2 rounded-full border border-white/15 bg-slate-950/65 px-3 py-2 text-sm text-white backdrop-blur-xl">
+            SC Characters
+          </span>
+        ) : (
+          <a href="/" className="flex items-center gap-2 rounded-full border border-white/15 bg-slate-950/65 px-3 py-2 text-sm text-white backdrop-blur-xl">
+            <ArrowLeft className="size-4" /> Characters
+          </a>
+        )}
         <div className="flex items-center gap-2 rounded-full border border-white/15 bg-slate-950/65 px-3 py-2 backdrop-blur-xl">
           <img src={`${import.meta.env.BASE_URL}sc-printing-logo.png`} alt="SC Printing" className="h-7 w-7 rounded-md bg-white object-contain p-0.5" />
           <span className="hidden text-xs font-semibold sm:inline">Annual Get-Together · AR</span>
@@ -144,7 +244,7 @@ export default function ArPage() {
 
         {cameraActive && selected && (
           <div className="absolute inset-0 z-10">
-            <RobotScene variant={selected} arMode />
+            <RobotScene variant={selected} arMode onCanvasReady={handleCanvas} />
           </div>
         )}
 
@@ -177,6 +277,11 @@ export default function ArPage() {
                     <RefreshCcw /> Scan another QR
                   </Button>
                 )}
+                {selected && (
+                  <Button type="button" onClick={capturePhoto} className="h-11 rounded-full bg-white px-5 text-slate-950 hover:bg-slate-100">
+                    <Camera /> Take photo
+                  </Button>
+                )}
                 <Button type="button" variant="outline" onClick={stopCamera} className="h-11 rounded-full border-white/20 bg-slate-950/65 px-5 text-white hover:bg-white/10 hover:text-white">
                   <CameraOff /> Stop camera
                 </Button>
@@ -196,12 +301,38 @@ export default function ArPage() {
               ))}
             </div>
 
-            <a href="/qr" className="mt-3 inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-cyan-200">
-              <QrCode className="size-3.5" /> Open printable QR sheet
-            </a>
+            {!STANDALONE && (
+              <a href="/qr" className="mt-3 inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-cyan-200">
+                <QrCode className="size-3.5" /> Open printable QR sheet
+              </a>
+            )}
           </div>
         </div>
       </section>
+
+      {photo && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-slate-950/95 backdrop-blur">
+          <div className="flex justify-end p-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setPhoto(null)}
+              className="h-11 rounded-full border-white/20 bg-slate-950/65 px-4 text-white hover:bg-white/10 hover:text-white"
+            >
+              <X /> Close
+            </Button>
+          </div>
+          <img src={photo} alt="Your AR photo" className="mx-auto max-h-[68dvh] object-contain" />
+          <div className="flex flex-wrap justify-center gap-3 p-6">
+            <Button type="button" onClick={sharePhoto} className="h-12 rounded-full bg-cyan-300 px-6 text-slate-950 hover:bg-cyan-200">
+              <Share2 /> Share
+            </Button>
+            <Button type="button" variant="outline" onClick={savePhoto} className="h-12 rounded-full border-white/20 bg-slate-950/65 px-6 text-white hover:bg-white/10 hover:text-white">
+              <Download /> Save
+            </Button>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

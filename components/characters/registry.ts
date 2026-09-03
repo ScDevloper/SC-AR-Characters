@@ -3,7 +3,18 @@
  * only look alike if they deliberately share a body.
  */
 
-export type BodyKind = "humanoid" | "rover" | "drone" | "roll" | "stack" | "arm" | "quad";
+export type BodyKind =
+  | "humanoid"
+  | "rover"
+  | "drone"
+  | "roll"
+  | "stack"
+  | "arm"
+  | "quad"
+  | "tube"
+  | "crawler"
+  | "drop"
+  | "swarm";
 
 export type CharacterConfig = {
   name: string;
@@ -199,6 +210,90 @@ export const CHARACTERS = {
     secondary: 0x4ade80,
     dance: "Wave walk",
     body: "quad",
+  },
+
+  /* --- soft and deforming bodies ------------------------------------ */
+  wavy: {
+    name: "Flappy",
+    shortName: "Wavy",
+    role: "Inflatable welcome dancer",
+    code: "AIR-19",
+    accent: 0x38bdf8,
+    secondary: 0xf472b6,
+    dance: "Air-blown flail",
+    body: "tube",
+  },
+  conveyor: {
+    name: "Segment",
+    shortName: "Conveyor",
+    role: "Segmented line crawler",
+    code: "CONV-20",
+    accent: 0xfbbf24,
+    secondary: 0x34d399,
+    dance: "Travelling wave",
+    body: "crawler",
+  },
+  droplet: {
+    name: "Splot",
+    shortName: "Ink drop",
+    role: "Liquid ink sample",
+    code: "DROP-21",
+    accent: 0x22d3ee,
+    secondary: 0xe879f9,
+    dance: "Squash and splash",
+    body: "drop",
+  },
+  halftone: {
+    name: "Dots",
+    shortName: "Halftone",
+    role: "Halftone dot swarm",
+    code: "DOT-22",
+    accent: 0x06b6d4,
+    secondary: 0xf43f5e,
+    dance: "Scatter and reform",
+    body: "swarm",
+  },
+
+  /* --- department characters (reuse existing bodies) ----------------- */
+  mis: {
+    name: "Nexus",
+    shortName: "MIS/IT",
+    role: "MIS and systems team",
+    code: "MIS-23",
+    accent: 0x818cf8,
+    secondary: 0x22d3ee,
+    dance: "Uptime sweep",
+    body: "arm",
+  },
+  finance: {
+    name: "Ledger",
+    shortName: "Finance",
+    role: "Finance and costing",
+    code: "FIN-24",
+    accent: 0x34d399,
+    secondary: 0xfacc15,
+    dance: "Balance bounce",
+    body: "stack",
+  },
+  hr: {
+    name: "Buddy",
+    shortName: "HR",
+    role: "People and welfare team",
+    code: "HR-25",
+    accent: 0xf472b6,
+    secondary: 0xfde68a,
+    dance: "Welcome wave",
+    body: "humanoid",
+  },
+  sales: {
+    name: "Pitch",
+    shortName: "Sales",
+    role: "Sales and client team",
+    code: "SLS-26",
+    accent: 0xfb7185,
+    secondary: 0x38bdf8,
+    dance: "Closing shuffle",
+    body: "rover",
   },
 } as const satisfies Record<string, CharacterConfig>;
 
