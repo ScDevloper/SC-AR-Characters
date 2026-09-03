@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
-import { addFace, addMesh, type CharacterRig, type Palette } from "./kit";
+import { addBrandBadge, addFace, addMesh, type CharacterRig, type Palette } from "./kit";
 
 /* ------------------------------------------------------------------ *
  * 1. Rover - tracked delivery unit, no legs at all
@@ -37,6 +37,11 @@ export function buildRover(scene: THREE.Scene, palette: Palette): CharacterRig {
       );
     }
   }
+
+  addBrandBadge(chassis, {
+    position: [0, 0.1, 0.87],
+    size: [1.35, 0.42],
+  });
 
   // Cargo bed: a stack of cartons that jiggles.
   const cargo = new THREE.Group();
@@ -131,6 +136,11 @@ export function buildDrone(scene: THREE.Scene, palette: Palette): CharacterRig {
   addMesh(hull, new RoundedBoxGeometry(1.0, 0.6, 0.12, 4, 0.14), screen, [0, 0.05, 0.86]);
   const eyes = addFace(hull, palette, 0.85);
   eyes.position.set(0, 0.05, 0.94);
+
+  addBrandBadge(hull, {
+    position: [0, -0.38, 0.78],
+    size: [1.1, 0.34],
+  });
 
   // Four rotor booms.
   const rotors: THREE.Mesh[] = [];
@@ -258,6 +268,11 @@ export function buildRoll(scene: THREE.Scene, palette: Palette): CharacterRig {
   const eyes = addFace(face, palette, 1.15);
   eyes.position.z = 1.03;
 
+  addBrandBadge(drum, {
+    position: [0, -0.72, 1.27],
+    size: [1.25, 0.39],
+  });
+
   // Little hopping feet.
   const feet: THREE.Group[] = [];
   for (const side of [-1, 1]) {
@@ -341,6 +356,11 @@ export function buildStack(scene: THREE.Scene, palette: Palette): CharacterRig {
   const eyes = addFace(head, palette, 0.85);
   eyes.position.set(0, 0.05, 0.68);
 
+  addBrandBadge(boxes[1], {
+    position: [0, -0.08, 0.7],
+    size: [1.2, 0.38],
+  });
+
   // Flaps that open like ears.
   const flaps: THREE.Group[] = [];
   for (const side of [-1, 1]) {
@@ -417,6 +437,10 @@ export function buildArm(scene: THREE.Scene, palette: Palette): CharacterRig {
   const column = new THREE.Group();
   column.position.y = 0.28;
   root.add(column);
+  addBrandBadge(column, {
+    position: [0, 0.43, 0.77],
+    size: [0.95, 0.3],
+  });
   addMesh(column, new THREE.CylinderGeometry(0.72, 0.86, 0.9, 28), metal, [0, 0.45, 0]);
   addMesh(column, new RoundedBoxGeometry(0.5, 0.36, 1.0, 3, 0.06), darkMetal, [0, 0.9, 0]);
 
@@ -511,6 +535,10 @@ export function buildQuad(scene: THREE.Scene, palette: Palette): CharacterRig {
   shell.scale.set(1.25, 0.55, 1.0);
   addMesh(body, new THREE.TorusGeometry(1.16, 0.07, 12, 44), cyan, [0, 0, 0], [Math.PI / 2, 0, 0]);
   addMesh(body, new RoundedBoxGeometry(0.9, 0.3, 0.5, 3, 0.08), darkMetal, [0, 0.34, 0]);
+  addBrandBadge(body, {
+    position: [0, -0.32, 0.94],
+    size: [1.08, 0.34],
+  });
 
   const head = new THREE.Group();
   head.position.set(0, 0.16, 0.92);

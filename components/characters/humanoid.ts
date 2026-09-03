@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
-import { addMesh, type CharacterRig, type Palette } from "./kit";
+import { addBrandBadge, addMesh, type CharacterRig, type Palette } from "./kit";
 
 /**
  * The original SC humanoid: two arms, two legs, ink-deck torso, screen face.
@@ -69,6 +69,11 @@ export function buildHumanoid(
       material,
       [-0.38 + index * 0.255, -0.55, 0.67],
     );
+  });
+
+  addBrandBadge(torso, {
+    position: [0, 0.04, 0.79],
+    size: [0.82, 0.26],
   });
 
   const head = new THREE.Group();
