@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type CSSProperties } from "react";
-import { Bot, Boxes, Palette, QrCode } from "lucide-react";
+import { Boxes, Palette, QrCode } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   ROBOT_VARIANTS,
@@ -36,10 +36,12 @@ export default function Home() {
     <main className="app-shell">
       <header className="site-header">
         <a href="/" className="brand-lockup" aria-label="SC Printing Robot home">
-          <span className="brand-mark"><Bot /></span>
+          <span className="brand-mark">
+            <img src="/sc-printing-logo.png" alt="SC Printing" />
+          </span>
           <span>
-            <strong>SC Printing</strong>
-            <small>Character Collection</small>
+            <strong>Annual Get-Together</strong>
+            <small>SC Printing · 3D Character Collection</small>
           </span>
         </a>
         <div className="model-status">
@@ -50,7 +52,7 @@ export default function Home() {
       <div className="collection-layout">
         <section className="character-rail" aria-label="Choose a character">
           <div className="rail-heading">
-            <p className="eyebrow">QR CHARACTER SET</p>
+            <p className="eyebrow">SC PRINTING · ANNUAL GET-TOGETHER</p>
             <h1>Twelve machines.<br />Twelve personalities.</h1>
             <p className="intro-copy">
               Each QR can open one dedicated printing or packaging character.
