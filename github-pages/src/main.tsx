@@ -14,20 +14,35 @@ import "./pages.css";
  * `.../SC-AR-Characters/?model=press` still lands on the AR view with that
  * character already selected.
  */
-function useHashRoute() {
-  const [route, setRoute] = useState(() => window.location.hash.replace(/^#\/?/, ""));
+function currentRoute() {
+  const hash = window.location.hash.replace(/^#\/?/, "");
+  if (hash) return hash;
+
+  // Paths like /SC-AR-Characters/qr are served by 404.html (see the Pages vite
+  // config), so the pathname still carries the route the user asked for.
+  const base = import.meta.env.BASE_URL.replace(/\/+$/, "");
+  const path = window.location.pathname.replace(base, "").replace(/^\/+|\/+$/g, "");
+  return path;
+}
+
+function useRoute() {
+  const [route, setRoute] = useState(currentRoute);
 
   useEffect(() => {
-    const onChange = () => setRoute(window.location.hash.replace(/^#\/?/, ""));
+    const onChange = () => setRoute(currentRoute());
     window.addEventListener("hashchange", onChange);
-    return () => window.removeEventListener("hashchange", onChange);
+    window.addEventListener("popstate", onChange);
+    return () => {
+      window.removeEventListener("hashchange", onChange);
+      window.removeEventListener("popstate", onChange);
+    };
   }, []);
 
   return route;
 }
 
 function PagesApp() {
-  if (useHashRoute() === "qr") return <QrSheetPage />;
+  if (useRoute() === "qr") return <QrSheetPage />;
 
   return (
     <div className="github-pages-ar">
