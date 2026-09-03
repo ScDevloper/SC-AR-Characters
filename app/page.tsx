@@ -1,41 +1,38 @@
 "use client";
 
 import { useEffect, useState, type CSSProperties } from "react";
-import { Boxes, Palette, QrCode } from "lucide-react";
+import { Boxes, Palette, QrCode, ScanLine } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { RobotScene } from "@/components/robot-scene";
 import {
-  ROBOT_VARIANTS,
-  RobotScene,
-  type RobotVariant,
-} from "@/components/robot-scene";
-
-const characterOrder = Object.keys(ROBOT_VARIANTS) as RobotVariant[];
-
-function isRobotVariant(value: string | null): value is RobotVariant {
-  return Boolean(value && value in ROBOT_VARIANTS);
-}
+  CHARACTERS,
+  CHARACTER_IDS,
+  hex,
+  isCharacterId,
+  type CharacterId,
+} from "@/components/characters/registry";
 
 export default function Home() {
-  const [selected, setSelected] = useState<RobotVariant>("press");
+  const [selected, setSelected] = useState<CharacterId>("press");
 
   useEffect(() => {
     const model = new URLSearchParams(window.location.search).get("model");
-    if (isRobotVariant(model)) setSelected(model);
+    if (isCharacterId(model)) setSelected(model);
   }, []);
 
-  const selectCharacter = (model: RobotVariant) => {
+  const selectCharacter = (model: CharacterId) => {
     setSelected(model);
     const url = new URL(window.location.href);
     url.searchParams.set("model", model);
     window.history.replaceState({}, "", url);
   };
 
-  const active = ROBOT_VARIANTS[selected];
+  const active = CHARACTERS[selected];
 
   return (
     <main className="app-shell">
       <header className="site-header">
-        <a href="/" className="brand-lockup" aria-label="SC Printing Robot home">
+        <a href="/" className="brand-lockup" aria-label="SC Printing character home">
           <span className="brand-mark">
             <img src="/sc-printing-logo.png" alt="SC Printing" />
           </span>
@@ -44,8 +41,22 @@ export default function Home() {
             <small>SC Printing · 3D Character Collection</small>
           </span>
         </a>
-        <div className="model-status">
-          <span /> Twelve models online
+        <div className="flex items-center gap-3">
+          <a
+            href="/ar"
+            className="header-action"
+          >
+            <ScanLine className="size-3.5" /> AR scan
+          </a>
+          <a
+            href="/qr"
+            className="header-action"
+          >
+            <QrCode className="size-3.5" /> QR sheet
+          </a>
+          <div className="model-status">
+            <span /> {CHARACTER_IDS.length} models online
+          </div>
         </div>
       </header>
 
@@ -53,15 +64,19 @@ export default function Home() {
         <section className="character-rail" aria-label="Choose a character">
           <div className="rail-heading">
             <p className="eyebrow">SC PRINTING · ANNUAL GET-TOGETHER</p>
-            <h1>Twelve machines.<br />Twelve personalities.</h1>
+            <h1>
+              {CHARACTER_IDS.length} machines.
+              <br />
+              {CHARACTER_IDS.length} personalities.
+            </h1>
             <p className="intro-copy">
               Each QR can open one dedicated printing or packaging character.
             </p>
           </div>
 
           <div className="character-list">
-            {characterOrder.map((key, index) => {
-              const character = ROBOT_VARIANTS[key];
+            {CHARACTER_IDS.map((key, index) => {
+              const character = CHARACTERS[key];
               const isActive = selected === key;
               return (
                 <Button
@@ -71,9 +86,11 @@ export default function Home() {
                   onClick={() => selectCharacter(key)}
                   aria-pressed={isActive}
                   className={`character-card ${isActive ? "is-active" : ""}`}
-                  style={{ "--character-color": `#${character.accent.toString(16).padStart(6, "0")}` } as CSSProperties}
+                  style={{ "--character-color": hex(character.accent) } as CSSProperties}
                 >
-                  <span className="character-number">0{index + 1}</span>
+                  <span className="character-number">
+                    {String(index + 1).padStart(2, "0")}
+                  </span>
                   <span className="character-meta">
                     <strong>{character.name}</strong>
                     <small>{character.role}</small>
@@ -88,7 +105,7 @@ export default function Home() {
         <section className="viewer-column">
           <div className="active-summary">
             <div>
-              <span className="active-dot" style={{ background: `#${active.accent.toString(16).padStart(6, "0")}` }} />
+              <span className="active-dot" style={{ background: hex(active.accent) }} />
               <span>{active.code}</span>
             </div>
             <p>{active.role}</p>
@@ -99,7 +116,7 @@ export default function Home() {
           </div>
 
           <div className="mobile-character-strip" aria-label="Choose another character">
-            {characterOrder.map((key) => (
+            {CHARACTER_IDS.map((key) => (
               <Button
                 key={key}
                 type="button"
@@ -108,7 +125,7 @@ export default function Home() {
                 aria-pressed={selected === key}
                 className={selected === key ? "is-active" : ""}
               >
-                {ROBOT_VARIANTS[key].shortName}
+                {CHARACTERS[key].shortName}
               </Button>
             ))}
           </div>
@@ -116,9 +133,15 @@ export default function Home() {
       </div>
 
       <footer className="collection-footer">
-        <span><Boxes /> Browser-native geometry</span>
-        <span><Palette /> Twelve unique characters</span>
-        <span><QrCode /> Direct QR-ready URLs</span>
+        <span>
+          <Boxes /> Browser-native geometry
+        </span>
+        <span>
+          <Palette /> {CHARACTER_IDS.length} unique characters
+        </span>
+        <span>
+          <QrCode /> Direct QR-ready URLs
+        </span>
       </footer>
     </main>
   );

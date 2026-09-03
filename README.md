@@ -1,6 +1,28 @@
-# vinext-starter
+# SC Printing AR Characters
 
-A clean full-stack starter running on [vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and Drizzle support.
+Interactive 3D and camera-based AR characters for the SC Printing Annual Get-Together. The application includes 18 printing and packaging characters, direct character links, an in-browser QR scanner, and a printable QR sheet.
+
+## Main Routes
+
+- `/` — browse all 18 animated characters
+- `/ar` — scan a character QR using the rear camera
+- `/ar?model=press` — open PressBot directly in AR mode
+- `/qr` — generate, download, and print all character QR codes
+- `/?model=press` — open PressBot in the standard 3D viewer
+
+## Run Locally on Windows
+
+```powershell
+git pull origin main
+npm install
+npm run dev
+```
+
+Open `http://localhost:5173`. Camera access works on `localhost`; mobile camera access requires a secure HTTPS deployment. The normal phone camera can still scan a locally generated QR when its URL is reachable over the same network.
+
+The QR sheet defaults to AR links. Generate the final printable sheet from the deployed `/qr` page so the codes contain the public site address.
+
+The AR mode uses the phone camera as the live background and renders the selected animated Three.js character above it. Users can rotate and resize the character using touch gestures.
 
 ## Prerequisites
 

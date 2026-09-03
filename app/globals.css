@@ -223,6 +223,25 @@ button, a { -webkit-tap-highlight-color: transparent; }
   box-shadow: 0 0 12px #22d3ee;
 }
 
+.header-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.42rem 0.72rem;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 999px;
+  color: #e2e8f0;
+  font-size: 0.75rem;
+  text-decoration: none;
+  transition: border-color 160ms ease, background 160ms ease, color 160ms ease;
+}
+
+.header-action:hover {
+  border-color: rgba(34, 211, 238, 0.5);
+  background: rgba(34, 211, 238, 0.1);
+  color: #cffafe;
+}
+
 .workspace-grid {
   min-height: calc(100svh - 76px);
   display: grid;
@@ -448,6 +467,16 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .robot-stage:fullscreen { min-height: 100vh; border-radius: 0; }
 .robot-stage canvas { display: block; width: 100%; height: 100%; }
 
+.robot-stage--ar {
+  min-height: 100%;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.robot-stage--ar canvas { background: transparent; }
+
 .stage-badge {
   display: inline-flex;
   align-items: center;
@@ -521,6 +550,9 @@ button, a { -webkit-tap-highlight-color: transparent; }
   .brand-mark img { width: 38px; height: 38px; }
   .brand-lockup small { max-width: 16rem; font-size: 0.65rem; }
   .model-status { display: none; }
+  .header-action { padding: 0.42rem; }
+  .header-action svg { width: 18px; height: 18px; }
+  .header-action { font-size: 0; gap: 0; }
   .workspace-grid { min-height: calc(100svh - 68px); padding-top: 1.35rem; }
   .intro-panel h1 { font-size: clamp(2.8rem, 14vw, 4.4rem); }
   .intro-copy { margin-top: 1.2rem; }
