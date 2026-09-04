@@ -265,7 +265,7 @@ export function buildDancer(scene: THREE.Scene, palette: Palette): CharacterRig 
   cheeks.scale.z *= 0.94;
 
   const jaw = addEllipsoid(head, skin, [0, -0.08, 0.035], [0.20, 0.17, 0.18], 1);
-  jaw.scale.y = 0.82;
+  jaw.scale.y *= 0.82; // multiply: the ellipsoid's shape lives in its scale
 
   addEllipsoid(head, skin, [0, -0.17, 0.07], [0.095, 0.065, 0.075], 1);
 
@@ -292,7 +292,7 @@ export function buildDancer(scene: THREE.Scene, palette: Palette): CharacterRig 
     eyeWhites.push({ mesh: eye, base: eye.scale.clone() });
 
     const pupil = addEllipsoid(face, iris, [side * 0.105, 0.043, 0.024], [0.028, 0.032, 0.012], 1);
-    pupil.scale.z = 0.7;
+    pupil.scale.z *= 0.7; // multiply, or the pupil becomes a 1.4-long spike
 
     addEllipsoid(face, darkFeature, [side * 0.105, 0.105, 0.005], [0.078, 0.012, 0.012], 1);
   }
@@ -478,17 +478,17 @@ export function buildDancer(scene: THREE.Scene, palette: Palette): CharacterRig 
     return new THREE.LatheGeometry(points, 48);
   };
 
-  const outerSkirt = addMesh(skirt, skirtProfile(0.31, 0.93, 0.91), dress, [0, 0, 0]);
-  const innerSkirt = addMesh(skirt, skirtProfile(0.29, 0.72, 0.72), underskirt, [0, -0.015, 0]);
+  const outerSkirt = addMesh(skirt, skirtProfile(0.31, 0.50, 0.86), dress, [0, 0, 0]);
+  const innerSkirt = addMesh(skirt, skirtProfile(0.29, 0.40, 0.68), underskirt, [0, -0.015, 0]);
 
   // Slightly offset decorative panels stop the skirt looking mathematically perfect.
   for (let i = 0; i < 8; i++) {
     const angle = (i / 8) * Math.PI * 2;
     const panel = addMesh(
       skirt,
-      new THREE.PlaneGeometry(0.36, 0.74, 1, 4),
+      new THREE.PlaneGeometry(0.22, 0.7, 1, 4),
       i % 2 === 0 ? dress : underskirt,
-      [Math.sin(angle) * 0.55, -0.38, Math.cos(angle) * 0.55],
+      [Math.sin(angle) * 0.34, -0.36, Math.cos(angle) * 0.34],
       [0.02 * Math.sin(angle), angle, 0],
     );
     panel.scale.x = 0.9;
@@ -496,7 +496,7 @@ export function buildDancer(scene: THREE.Scene, palette: Palette): CharacterRig 
 
   addMesh(
     skirt,
-    new THREE.TorusGeometry(0.93, 0.026, 10, 48),
+    new THREE.TorusGeometry(0.50, 0.022, 10, 48),
     trim,
     [0, -0.91, 0],
     [Math.PI / 2, 0, 0],
