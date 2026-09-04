@@ -2,30 +2,74 @@ import * as THREE from "three";
 import { addFace, addMesh, type CharacterRig, type Palette } from "./kit";
 
 /**
- * The only non-machine character in the set, so it gets its own body.
+ * Procedural human dancer.
  *
- * What makes a figure read as real in motion is joint count and secondary
- * motion, not polygon count. This build carries an articulated spine
- * (hips -> waist -> chest -> neck), hands with curling fingers, ankles that
- * roll heel-to-toe, a two-layer skirt whose panels flare at different rates,
- * and hair that trails the head instead of being welded to it.
+ * The important part of this model is the hierarchy: pelvis -> spine -> neck
+ * -> head and shoulder -> upper arm -> forearm -> hand, with three-part legs.
+ * Keeping the joints separate lets the animation create natural weight shift,
+ * counter rotation and delayed secondary motion without changing the scene
+ * harness or registry.
  */
 
-// Single constants, easy to change.
 const BODY_TONE = 0xf0d9c0;
+const BODY_TONE_DARK = 0xd8aa91;
 const HAIR_TONE = 0x241a18;
 
-/** Tapered limb profile - smoother than a capsule, still cheap. */
-function limbGeometry(top: number, mid: number, bottom: number, length: number) {
+function latheProfile(
+  radii: number[],
+  length: number,
+  segments = 24,
+  curve: (t: number) => number = (t) => t,
+) {
   const points: THREE.Vector2[] = [];
-  for (let i = 0; i <= 8; i++) {
-    const t = i / 8;
-    // Widest around a third down, like a real muscle belly.
-    const bulge = Math.sin(t * Math.PI) * 0.5 + 0.5;
-    const radius = THREE.MathUtils.lerp(top, bottom, t) * (0.86 + bulge * 0.14 * (mid / top));
-    points.push(new THREE.Vector2(Math.max(radius, 0.012), -t * length));
+  const count = radii.length - 1;
+
+  for (let i = 0; i < radii.length; i++) {
+    const t = i / count;
+    points.push(new THREE.Vector2(Math.max(radii[i], 0.008), -curve(t) * length));
   }
-  return new THREE.LatheGeometry(points, 18);
+
+  return new THREE.LatheGeometry(points, segments);
+}
+
+/** Human muscle profile rather than a constant-radius cylinder. */
+function limbGeometry(
+  top: number,
+  mid: number,
+  bottom: number,
+  length: number,
+  segments = 20,
+) {
+  return latheProfile(
+    [top, top * 1.05, mid, mid * 0.96, bottom * 1.04, bottom],
+    length,
+    segments,
+    (t) => t,
+  );
+}
+
+function addRoundedLimb(
+  parent: THREE.Object3D,
+  material: THREE.Material,
+  position: [number, number, number],
+  top: number,
+  mid: number,
+  bottom: number,
+  length: number,
+) {
+  return addMesh(parent, limbGeometry(top, mid, bottom, length), material, position);
+}
+
+function addEllipsoid(
+  parent: THREE.Object3D,
+  material: THREE.Material,
+  position: [number, number, number],
+  scale: [number, number, number],
+  radius = 1,
+) {
+  const mesh = addMesh(parent, new THREE.SphereGeometry(radius, 28, 20), material, position);
+  mesh.scale.set(...scale);
+  return mesh;
 }
 
 export function buildDancer(scene: THREE.Scene, palette: Palette): CharacterRig {
@@ -35,316 +79,654 @@ export function buildDancer(scene: THREE.Scene, palette: Palette): CharacterRig 
   root.position.y = 0.08;
   scene.add(root);
 
+  /* ------------------------------------------------------------------ *
+   * Materials
+   * ------------------------------------------------------------------ */
+
   const skin = new THREE.MeshPhysicalMaterial({
     color: BODY_TONE,
+    roughness: 0.52,
+    metalness: 0,
+    sheen: 0.22,
+    sheenRoughness: 0.62,
+    sheenColor: new THREE.Color(0xffe4d5),
+    clearcoat: 0.06,
+    clearcoatRoughness: 0.7,
+    envMapIntensity: 0.8,
+  });
+
+  const skinDark = new THREE.MeshPhysicalMaterial({
+    color: BODY_TONE_DARK,
     roughness: 0.58,
     metalness: 0,
-    sheen: 0.35,
-    sheenRoughness: 0.75,
-    sheenColor: new THREE.Color(0xffe8d8),
-    clearcoat: 0.18,
-    clearcoatRoughness: 0.6,
-    envMapIntensity: 0.75,
+    sheen: 0.16,
+    sheenRoughness: 0.7,
+    envMapIntensity: 0.7,
   });
-  // Fabric: high sheen at grazing angles is what separates cloth from plastic.
+
   const dress = new THREE.MeshPhysicalMaterial({
     color: cyan.color.clone(),
-    roughness: 0.76,
+    roughness: 0.72,
     metalness: 0,
-    sheen: 0.95,
-    sheenRoughness: 0.4,
+    sheen: 0.9,
+    sheenRoughness: 0.42,
     sheenColor: magenta.color.clone(),
     side: THREE.DoubleSide,
-    envMapIntensity: 0.9,
+    envMapIntensity: 0.85,
   });
+
   const underskirt = dress.clone();
   underskirt.color = magenta.color.clone();
   underskirt.sheenColor = cyan.color.clone();
+  underskirt.roughness = 0.8;
+
   const hair = new THREE.MeshPhysicalMaterial({
     color: HAIR_TONE,
-    roughness: 0.38,
+    roughness: 0.34,
     metalness: 0,
-    sheen: 0.8,
-    sheenRoughness: 0.28,
-    sheenColor: new THREE.Color(0x8a6a5a),
-    clearcoat: 0.5,
-    clearcoatRoughness: 0.25,
-    envMapIntensity: 0.95,
+    sheen: 0.72,
+    sheenRoughness: 0.25,
+    sheenColor: new THREE.Color(0x8b6557),
+    clearcoat: 0.3,
+    clearcoatRoughness: 0.32,
+    envMapIntensity: 0.9,
   });
+
+  const hairHighlight = hair.clone();
+  hairHighlight.color = new THREE.Color(0x3b2925);
+  hairHighlight.roughness = 0.29;
+
   const trim = new THREE.MeshPhysicalMaterial({
     color: magenta.color.clone(),
-    roughness: 0.45,
-    metalness: 0.2,
+    roughness: 0.43,
+    metalness: 0.18,
     sheen: 0.5,
-    envMapIntensity: 1.0,
-  });
-  const feature = new THREE.MeshPhysicalMaterial({
-    color: 0xb8705f,
-    roughness: 0.5,
-    metalness: 0,
-    envMapIntensity: 0.6,
+    envMapIntensity: 0.95,
   });
 
-  /* ---- spine: four joints instead of one rigid torso ---------------- */
+  const shoe = new THREE.MeshPhysicalMaterial({
+    color: 0x161b24,
+    roughness: 0.32,
+    metalness: 0.08,
+    clearcoat: 0.3,
+    clearcoatRoughness: 0.3,
+    envMapIntensity: 0.9,
+  });
+
+  const sole = new THREE.MeshStandardMaterial({
+    color: 0x090b10,
+    roughness: 0.7,
+    metalness: 0,
+    envMapIntensity: 0.65,
+  });
+
+  const eyeWhite = new THREE.MeshPhysicalMaterial({
+    color: 0xf7f4ee,
+    roughness: 0.3,
+    metalness: 0,
+    envMapIntensity: 0.7,
+  });
+
+  const iris = new THREE.MeshPhysicalMaterial({
+    color: 0x4c332c,
+    roughness: 0.24,
+    metalness: 0,
+    clearcoat: 0.4,
+    envMapIntensity: 0.8,
+  });
+
+  const lip = new THREE.MeshPhysicalMaterial({
+    color: 0xb65f69,
+    roughness: 0.44,
+    metalness: 0,
+    sheen: 0.25,
+    envMapIntensity: 0.65,
+  });
+
+  const darkFeature = new THREE.MeshStandardMaterial({
+    color: 0x5a3731,
+    roughness: 0.55,
+    metalness: 0,
+  });
+
+  /* ------------------------------------------------------------------ *
+   * Pelvis and articulated spine
+   * ------------------------------------------------------------------ */
 
   const hips = new THREE.Group();
-  hips.position.y = 1.10;
+  hips.position.y = 1.13;
   root.add(hips);
-  addMesh(hips, limbGeometry(0.3, 0.31, 0.26, 0.3), skin, [0, 0.15, 0]);
+
+  const pelvis = addEllipsoid(hips, skin, [0, 0.08, 0], [0.31, 0.26, 0.19], 1);
+  pelvis.rotation.x = -0.04;
 
   const waist = new THREE.Group();
-  waist.position.y = 0.16;
+  waist.position.y = 0.24;
   hips.add(waist);
-  addMesh(waist, limbGeometry(0.24, 0.25, 0.28, 0.3), skin, [0, 0.3, 0]);
+  const waistMesh = addRoundedLimb(waist, skin, [0, 0, 0], 0.245, 0.255, 0.275, 0.27);
+  waistMesh.scale.z = 0.82;
 
   const chest = new THREE.Group();
-  chest.position.y = 0.32;
+  chest.position.y = 0.29;
   waist.add(chest);
-  const ribs = addMesh(chest, limbGeometry(0.32, 0.33, 0.26, 0.46), skin, [0, 0.46, 0]);
-  ribs.scale.set(1, 1, 0.84);
-  // Bodice over the chest, with a belt at the waist seam.
-  const bodice = addMesh(chest, new THREE.CylinderGeometry(0.335, 0.3, 0.62, 28), dress, [0, 0.2, 0]);
-  bodice.scale.set(1, 1, 0.86);
-  addMesh(chest, new THREE.TorusGeometry(0.31, 0.032, 10, 30), trim, [0, -0.1, 0], [Math.PI / 2, 0, 0]);
-  for (const side of [-1, 1]) {
-    addMesh(chest, new THREE.CylinderGeometry(0.022, 0.022, 0.34, 8), dress, [side * 0.17, 0.5, -0.02], [0.1, 0, side * 0.12]);
-  }
+
+  const ribcage = addEllipsoid(chest, skin, [0, 0.2, 0], [0.34, 0.46, 0.25], 1);
+  ribcage.rotation.x = Math.PI;
+
+  // Dress bodice follows the rib cage instead of looking like a straight tube.
+  const bodice = addMesh(
+    chest,
+    latheProfile([0.28, 0.32, 0.34, 0.335, 0.305], 0.62, 32, (t) => t),
+    dress,
+    [0, 0.06, 0],
+  );
+  bodice.scale.z = 0.78;
+
+  addMesh(
+    chest,
+    new THREE.TorusGeometry(0.305, 0.025, 10, 36),
+    trim,
+    [0, -0.04, 0],
+    [Math.PI / 2, 0, 0],
+  );
+
+  // A subtle neckline.
+  addMesh(
+    chest,
+    new THREE.TorusGeometry(0.245, 0.018, 8, 32, Math.PI * 1.45),
+    trim,
+    [0, 0.45, 0.012],
+    [Math.PI / 2, 0, Math.PI],
+  );
+
+  /* ------------------------------------------------------------------ *
+   * Neck and face
+   * ------------------------------------------------------------------ */
 
   const neck = new THREE.Group();
-  neck.position.y = 0.62;
+  neck.position.y = 0.66;
   chest.add(neck);
-  addMesh(neck, limbGeometry(0.098, 0.1, 0.11, 0.18), skin, [0, 0.09, 0]);
-
-  /* ---- head, face, hair --------------------------------------------- */
+  addRoundedLimb(neck, skin, [0, 0, 0], 0.095, 0.105, 0.11, 0.2);
 
   const head = new THREE.Group();
-  head.position.y = 0.2;
+  head.position.y = 0.22;
   neck.add(head);
-  const skull = addMesh(head, new THREE.SphereGeometry(0.3, 36, 28), skin, [0, 0.16, 0]);
-  skull.scale.set(0.92, 1.02, 0.95);
-  // Jaw taper, so the head is not a plain ball.
-  const jaw = addMesh(head, new THREE.SphereGeometry(0.24, 28, 20), skin, [0, 0.02, 0.03]);
-  jaw.scale.set(0.9, 0.85, 0.95);
 
-  addMesh(head, new THREE.ConeGeometry(0.032, 0.075, 12), skin, [0, 0.15, 0.28], [Math.PI / 2.1, 0, 0]);
-  addMesh(head, new THREE.SphereGeometry(0.045, 14, 10), feature, [0, 0.03, 0.26]).scale.set(1.5, 0.7, 0.6);
+  // Head silhouette: cranium + cheeks + jaw + chin.
+  const cranium = addEllipsoid(head, skin, [0, 0.18, 0], [0.285, 0.34, 0.265], 1);
+  cranium.rotation.x = -0.02;
+
+  const cheeks = addEllipsoid(head, skin, [0, 0.01, 0.025], [0.245, 0.23, 0.235], 1);
+  cheeks.scale.z *= 0.94;
+
+  const jaw = addEllipsoid(head, skin, [0, -0.08, 0.035], [0.20, 0.17, 0.18], 1);
+  jaw.scale.y = 0.82;
+
+  addEllipsoid(head, skin, [0, -0.17, 0.07], [0.095, 0.065, 0.075], 1);
+
+  // Nose bridge and soft nose tip.
+  addMesh(
+    head,
+    new THREE.CapsuleGeometry(0.026, 0.075, 6, 12),
+    skin,
+    [0, 0.045, 0.27],
+    [Math.PI / 2, 0, 0],
+  );
+  addEllipsoid(head, skinDark, [0, -0.005, 0.305], [0.052, 0.04, 0.06], 1);
+
+  // Eyes are intentionally separate from addFace: that shared helper is
+  // designed for the stylized machine characters.
+  const face = new THREE.Group();
+  face.position.set(0, 0.12, 0.25);
+  head.add(face);
+
   for (const side of [-1, 1]) {
-    addMesh(head, new THREE.BoxGeometry(0.1, 0.016, 0.02), skin, [side * 0.11, 0.29, 0.25], [0, 0, side * 0.12]);
-    addMesh(head, new THREE.SphereGeometry(0.05, 12, 10), skin, [side * 0.29, 0.14, 0.01]).scale.set(0.5, 1, 0.8);
+    const eye = addEllipsoid(face, eyeWhite, [side * 0.105, 0.045, 0], [0.078, 0.052, 0.026], 1);
+    eye.rotation.z = side * -0.05;
+
+    const pupil = addEllipsoid(face, iris, [side * 0.105, 0.043, 0.024], [0.028, 0.032, 0.012], 1);
+    pupil.scale.z = 0.7;
+
+    addEllipsoid(face, darkFeature, [side * 0.105, 0.105, 0.005], [0.078, 0.012, 0.012], 1);
   }
 
-  const eyes = addFace(head, palette, 0.56);
-  eyes.position.set(0, 0.2, 0.27);
-
-  const cap = addMesh(head, new THREE.SphereGeometry(0.315, 34, 26, 0, Math.PI * 2, 0, Math.PI * 0.6), hair, [0, 0.17, -0.025]);
-  cap.scale.set(0.97, 1.04, 1.02);
-  // Framing strands down each side of the face.
-  const strands = [-1, 1].map((side) => {
-    const strand = new THREE.Group();
-    strand.position.set(side * 0.24, 0.34, 0.08);
-    head.add(strand);
-    addMesh(strand, limbGeometry(0.05, 0.055, 0.02, 0.42), hair, [0, 0, 0], [0.1, 0, side * 0.12]);
-    return { strand, side };
-  });
-
-  const tail = new THREE.Group();
-  tail.position.set(0, 0.28, -0.24);
-  head.add(tail);
-  addMesh(tail, new THREE.SphereGeometry(0.12, 20, 16), hair, [0, 0, 0]);
-  addMesh(tail, new THREE.TorusGeometry(0.11, 0.022, 8, 20), trim, [0, 0.01, 0], [Math.PI / 2, 0, 0]);
-  const tailLinks: THREE.Group[] = [];
-  let link: THREE.Object3D = tail;
-  for (let i = 0; i < 4; i++) {
-    const seg = new THREE.Group();
-    seg.position.y = i === 0 ? -0.05 : -0.26;
-    link.add(seg);
-    addMesh(seg, limbGeometry(0.095 - i * 0.016, 0.1 - i * 0.016, 0.07 - i * 0.014, 0.28), hair, [0, 0, 0]);
-    tailLinks.push(seg);
-    link = seg;
+  // Brows, lips and a tiny lower-lip highlight make the face read at camera distance.
+  for (const side of [-1, 1]) {
+    addMesh(
+      face,
+      new THREE.CapsuleGeometry(0.009, 0.065, 4, 8),
+      darkFeature,
+      [side * 0.105, 0.125, 0.006],
+      [0, 0, side * 0.1],
+    );
   }
 
-  /* ---- arms, with hands that curl ------------------------------------ */
+  addMesh(
+    face,
+    new THREE.TorusGeometry(0.043, 0.012, 8, 20, Math.PI),
+    lip,
+    [0, -0.085, 0.015],
+    [0, 0, Math.PI],
+  );
+  addEllipsoid(face, lip, [0, -0.099, 0.018], [0.032, 0.009, 0.008], 1);
+
+  // Ears.
+  for (const side of [-1, 1]) {
+    addEllipsoid(head, skin, [side * 0.275, 0.08, 0.01], [0.045, 0.07, 0.035], 1);
+    addMesh(
+      head,
+      new THREE.TorusGeometry(0.027, 0.005, 6, 14),
+      skinDark,
+      [side * 0.282, 0.08, 0.035],
+      [Math.PI / 2, 0, 0],
+    );
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Hair: cap + layered strands + articulated ponytail
+   * ------------------------------------------------------------------ */
+
+  const hairCap = addMesh(
+    head,
+    new THREE.SphereGeometry(0.305, 40, 28, 0, Math.PI * 2, 0, Math.PI * 0.62),
+    hair,
+    [0, 0.19, -0.015],
+  );
+  hairCap.scale.set(1.01, 1.08, 1.03);
+
+  // Side locks follow the cheeks.
+  const strands: { strand: THREE.Group; side: number; phase: number }[] = [];
+  for (const side of [-1, 1]) {
+    for (let i = 0; i < 2; i++) {
+      const strand = new THREE.Group();
+      strand.position.set(side * (0.235 + i * 0.018), 0.31 - i * 0.035, 0.02);
+      head.add(strand);
+      addRoundedLimb(strand, hair, [0, 0, 0], 0.045, 0.052, 0.018, 0.39 + i * 0.08);
+      strand.rotation.z = side * (0.08 + i * 0.03);
+      strands.push({ strand, side, phase: i * 0.3 });
+    }
+  }
+
+  const pony = new THREE.Group();
+  pony.position.set(0, 0.34, -0.25);
+  head.add(pony);
+  addEllipsoid(pony, hair, [0, 0, 0], [0.14, 0.17, 0.13], 1);
+  addMesh(
+    pony,
+    new THREE.TorusGeometry(0.115, 0.018, 8, 22),
+    trim,
+    [0, -0.03, 0.015],
+    [Math.PI / 2, 0, 0],
+  );
+
+  const ponyLinks: THREE.Group[] = [];
+  let ponyParent: THREE.Object3D = pony;
+  for (let i = 0; i < 5; i++) {
+    const segment = new THREE.Group();
+    segment.position.y = i === 0 ? -0.07 : -0.19;
+    segment.position.z = -0.015 - i * 0.008;
+    ponyParent.add(segment);
+    addRoundedLimb(
+      segment,
+      i % 2 === 0 ? hair : hairHighlight,
+      [0, 0, 0],
+      0.09 - i * 0.012,
+      0.095 - i * 0.014,
+      0.055 - i * 0.008,
+      0.22,
+    );
+    ponyLinks.push(segment);
+    ponyParent = segment;
+  }
+
+  // Shared face helper is retained only as a subtle fallback accent, keeping
+  // this body compatible with the existing palette/kit contract.
+  const faceAccent = addFace(head, palette, 0.34);
+  faceAccent.position.set(0, 0.16, -0.015);
+  faceAccent.scale.setScalar(0.01);
+
+  /* ------------------------------------------------------------------ *
+   * Arms: shoulder, upper arm, elbow, forearm, wrist and articulated hand
+   * ------------------------------------------------------------------ */
 
   const arms = [-1, 1].map((side) => {
     const shoulder = new THREE.Group();
-    shoulder.position.set(side * 0.31, 0.52, 0);
+    shoulder.position.set(side * 0.33, 0.49, 0);
     chest.add(shoulder);
-    addMesh(shoulder, new THREE.SphereGeometry(0.105, 18, 14), skin, [0, 0, 0]);
-    addMesh(shoulder, limbGeometry(0.088, 0.095, 0.072, 0.44), skin, [0, -0.02, 0]);
+
+    addEllipsoid(shoulder, skin, [0, 0, 0], [0.115, 0.12, 0.115], 1);
+
+    const upperArm = new THREE.Group();
+    upperArm.position.y = -0.055;
+    shoulder.add(upperArm);
+    addRoundedLimb(upperArm, skin, [0, 0, 0], 0.09, 0.105, 0.07, 0.39);
+
+    const elbow = new THREE.Group();
+    elbow.position.y = -0.40;
+    upperArm.add(elbow);
+    addEllipsoid(elbow, skin, [0, 0, 0], [0.075, 0.075, 0.072], 1);
 
     const forearm = new THREE.Group();
-    forearm.position.y = -0.46;
-    shoulder.add(forearm);
-    addMesh(forearm, new THREE.SphereGeometry(0.075, 14, 12), skin, [0, 0, 0]);
-    addMesh(forearm, limbGeometry(0.072, 0.078, 0.052, 0.4), skin, [0, -0.01, 0]);
-    addMesh(forearm, new THREE.TorusGeometry(0.062, 0.016, 8, 18), trim, [0, -0.35, 0], [Math.PI / 2, 0, 0]);
+    forearm.position.y = -0.045;
+    elbow.add(forearm);
+    addRoundedLimb(forearm, skin, [0, 0, 0], 0.072, 0.078, 0.052, 0.36);
+
+    const wrist = new THREE.Group();
+    wrist.position.y = -0.365;
+    forearm.add(wrist);
+    addEllipsoid(wrist, skin, [0, 0, 0], [0.052, 0.045, 0.052], 1);
 
     const hand = new THREE.Group();
-    hand.position.y = -0.42;
-    forearm.add(hand);
-    const palm = addMesh(hand, new THREE.BoxGeometry(0.075, 0.1, 0.038), skin, [0, -0.05, 0]);
-    palm.geometry.translate(0, 0, 0);
-    // Four fingers plus a thumb, curling as a group.
-    const fingers = new THREE.Group();
-    fingers.position.y = -0.1;
-    hand.add(fingers);
-    for (let f = 0; f < 4; f++) {
-      addMesh(fingers, limbGeometry(0.014, 0.015, 0.01, 0.085), skin, [(f - 1.5) * 0.021, 0, 0]);
-    }
-    const thumb = new THREE.Group();
-    thumb.position.set(side * 0.04, -0.04, 0.01);
-    hand.add(thumb);
-    addMesh(thumb, limbGeometry(0.016, 0.017, 0.012, 0.06), skin, [0, 0, 0], [0, 0, side * 0.9]);
+    hand.position.y = -0.055;
+    wrist.add(hand);
 
-    return { shoulder, forearm, hand, fingers, thumb, side };
+    const palm = addEllipsoid(hand, skin, [0, -0.045, 0], [0.075, 0.095, 0.048], 1);
+    palm.rotation.z = side * 0.06;
+
+    const fingerGroups: THREE.Group[] = [];
+    for (let f = 0; f < 4; f++) {
+      const finger = new THREE.Group();
+      finger.position.set((f - 1.5) * 0.026, -0.12, 0.008);
+      hand.add(finger);
+      addRoundedLimb(finger, skin, [0, 0, 0], 0.014, 0.015, 0.009, 0.085, 12);
+      const tip = new THREE.Group();
+      tip.position.y = -0.087;
+      finger.add(tip);
+      addRoundedLimb(tip, skin, [0, 0, 0], 0.011, 0.011, 0.007, 0.055, 12);
+      fingerGroups.push(finger);
+    }
+
+    const thumb = new THREE.Group();
+    thumb.position.set(side * 0.067, -0.04, 0.005);
+    hand.add(thumb);
+    addRoundedLimb(thumb, skin, [0, 0, 0], 0.017, 0.018, 0.011, 0.085, 12);
+
+    addMesh(
+      wrist,
+      new THREE.TorusGeometry(0.058, 0.012, 8, 22),
+      trim,
+      [0, -0.015, 0],
+      [Math.PI / 2, 0, 0],
+    );
+
+    return { shoulder, upperArm, elbow, forearm, wrist, hand, fingerGroups, thumb, side };
   });
 
-  /* ---- two-layer skirt ----------------------------------------------- */
-
-  const skirtProfile = (topR: number, hemR: number, drop: number) => {
-    const pts: THREE.Vector2[] = [];
-    for (let i = 0; i <= 10; i++) {
-      const t = i / 10;
-      // Eased flare: hangs close at the waist, opens toward the hem.
-      pts.push(new THREE.Vector2(THREE.MathUtils.lerp(topR, hemR, t * t * 0.7 + t * 0.3), -t * drop));
-    }
-    return new THREE.LatheGeometry(pts, 40);
-  };
+  /* ------------------------------------------------------------------ *
+   * Dress and skirt
+   * ------------------------------------------------------------------ */
 
   const skirt = new THREE.Group();
   skirt.position.y = 0.06;
   hips.add(skirt);
-  const outerPanel = addMesh(skirt, skirtProfile(0.33, 0.96, 0.95), dress, [0, 0, 0]);
-  const innerPanel = addMesh(skirt, skirtProfile(0.31, 0.72, 0.7), underskirt, [0, -0.01, 0]);
-  addMesh(skirt, new THREE.TorusGeometry(0.955, 0.028, 10, 44), trim, [0, -0.95, 0], [Math.PI / 2, 0, 0]);
 
-  /* ---- legs, with ankles that roll ------------------------------------ */
+  const skirtProfile = (top: number, hem: number, drop: number) => {
+    const points: THREE.Vector2[] = [];
+    for (let i = 0; i <= 14; i++) {
+      const t = i / 14;
+      const eased = t * t * (3 - 2 * t);
+      const radius = THREE.MathUtils.lerp(top, hem, eased);
+      points.push(new THREE.Vector2(radius, -t * drop));
+    }
+    return new THREE.LatheGeometry(points, 48);
+  };
+
+  const outerSkirt = addMesh(skirt, skirtProfile(0.31, 0.93, 0.91), dress, [0, 0, 0]);
+  const innerSkirt = addMesh(skirt, skirtProfile(0.29, 0.72, 0.72), underskirt, [0, -0.015, 0]);
+
+  // Slightly offset decorative panels stop the skirt looking mathematically perfect.
+  for (let i = 0; i < 8; i++) {
+    const angle = (i / 8) * Math.PI * 2;
+    const panel = addMesh(
+      skirt,
+      new THREE.PlaneGeometry(0.36, 0.74, 1, 4),
+      i % 2 === 0 ? dress : underskirt,
+      [Math.sin(angle) * 0.55, -0.38, Math.cos(angle) * 0.55],
+      [0.02 * Math.sin(angle), angle, 0],
+    );
+    panel.scale.x = 0.9;
+  }
+
+  addMesh(
+    skirt,
+    new THREE.TorusGeometry(0.93, 0.026, 10, 48),
+    trim,
+    [0, -0.91, 0],
+    [Math.PI / 2, 0, 0],
+  );
+
+  /* ------------------------------------------------------------------ *
+   * Legs: pelvis -> thigh -> knee -> shin -> ankle -> shoe
+   * ------------------------------------------------------------------ */
 
   const legs = [-1, 1].map((side) => {
     const thigh = new THREE.Group();
-    thigh.position.set(side * 0.14, -0.05, 0);
+    thigh.position.set(side * 0.14, -0.07, 0);
     hips.add(thigh);
-    addMesh(thigh, limbGeometry(0.115, 0.125, 0.085, 0.6), skin, [0, 0, 0]);
+    addRoundedLimb(thigh, skin, [0, 0, 0], 0.125, 0.15, 0.09, 0.59);
+
+    const knee = new THREE.Group();
+    knee.position.y = -0.6;
+    thigh.add(knee);
+    addEllipsoid(knee, skin, [0, 0, 0], [0.085, 0.08, 0.075], 1);
 
     const shin = new THREE.Group();
-    shin.position.y = -0.62;
-    thigh.add(shin);
-    addMesh(shin, new THREE.SphereGeometry(0.082, 14, 12), skin, [0, 0, 0]);
-    addMesh(shin, limbGeometry(0.082, 0.095, 0.05, 0.56), skin, [0, 0, 0]);
+    shin.position.y = -0.045;
+    knee.add(shin);
+    addRoundedLimb(shin, skin, [0, 0, 0], 0.08, 0.085, 0.052, 0.57);
 
     const ankle = new THREE.Group();
     ankle.position.y = -0.58;
     shin.add(ankle);
-    addMesh(ankle, new THREE.SphereGeometry(0.05, 12, 10), skin, [0, 0, 0]);
-    addMesh(ankle, new THREE.BoxGeometry(0.085, 0.05, 0.2), trim, [0, -0.04, 0.05]);
-    addMesh(ankle, new THREE.BoxGeometry(0.07, 0.09, 0.05), trim, [0, -0.03, -0.05]);
+    addEllipsoid(ankle, skin, [0, 0, 0], [0.055, 0.055, 0.055], 1);
 
-    return { thigh, shin, ankle, side };
+    // Ballet-inspired shoe, with separate toe box and sole for a readable foot.
+    const foot = new THREE.Group();
+    foot.position.set(0, -0.035, 0.06);
+    ankle.add(foot);
+
+    const upper = addEllipsoid(foot, shoe, [0, 0, 0.075], [0.085, 0.055, 0.19], 1);
+    upper.rotation.x = -0.06;
+    addEllipsoid(foot, shoe, [0, 0.002, 0.19], [0.082, 0.05, 0.12], 1);
+    addMesh(foot, new THREE.BoxGeometry(0.14, 0.025, 0.31), sole, [0, -0.047, 0.105]);
+
+    // A slim ankle strap ties the shoe visually into the costume.
+    addMesh(
+      foot,
+      new THREE.TorusGeometry(0.055, 0.009, 7, 20),
+      trim,
+      [0, 0.025, -0.02],
+      [Math.PI / 2, 0, 0],
+    ).scale.set(1.2, 1, 1.0);
+
+    return { thigh, knee, shin, ankle, foot, side };
   });
 
-  /* ---- animation ------------------------------------------------------ */
+  /* ------------------------------------------------------------------ *
+   * Rest pose
+   * ------------------------------------------------------------------ */
 
   const rest = () => {
     root.position.set(0, 0.08, 0);
     root.rotation.set(0, 0, 0);
-    hips.position.y = 1.10;
+
+    hips.position.set(0, 1.13, 0);
     hips.rotation.set(0, 0, 0);
     waist.rotation.set(0, 0, 0);
     chest.rotation.set(0, 0, 0);
     neck.rotation.set(0, 0, 0);
     head.rotation.set(0, 0, 0);
-    tail.rotation.set(0, 0, 0);
-    tailLinks.forEach((seg) => seg.rotation.set(0, 0, 0));
-    strands.forEach(({ strand, side }) => strand.rotation.set(0, 0, side * 0.1));
+    pony.rotation.set(0, 0, 0);
+    ponyLinks.forEach((part) => part.rotation.set(0, 0, 0));
     skirt.rotation.set(0, 0, 0);
     skirt.scale.set(1, 1, 1);
-    outerPanel.rotation.set(0, 0, 0);
-    innerPanel.rotation.set(0, 0, 0);
-    arms.forEach(({ shoulder, forearm, hand, fingers, thumb, side }) => {
-      shoulder.rotation.set(0, 0, side * 0.16);
+    outerSkirt.rotation.set(0, 0, 0);
+    innerSkirt.rotation.set(0, 0, 0);
+
+    strands.forEach(({ strand, side }) => {
+      strand.rotation.set(0, 0, side * 0.1);
+    });
+
+    arms.forEach(({ shoulder, upperArm, elbow, forearm, wrist, hand, fingerGroups, thumb, side }) => {
+      shoulder.rotation.set(0, 0, side * 0.12);
+      upperArm.rotation.set(0, 0, 0);
+      elbow.rotation.set(0, 0, 0);
       forearm.rotation.set(0, 0, 0);
+      wrist.rotation.set(0, 0, 0);
       hand.rotation.set(0, 0, 0);
-      fingers.rotation.set(0, 0, 0);
+      fingerGroups.forEach((finger) => finger.rotation.set(0, 0, 0));
       thumb.rotation.set(0, 0, 0);
     });
-    legs.forEach(({ thigh, shin, ankle }) => {
+
+    legs.forEach(({ thigh, knee, shin, ankle }) => {
       thigh.rotation.set(0, 0, 0);
+      knee.rotation.set(0, 0, 0);
       shin.rotation.set(0, 0, 0);
       ankle.rotation.set(0, 0, 0);
     });
-    eyes.scale.set(1, 1, 1);
   };
 
-  const update = ({ beat }: { t: number; beat: number; delta: number }) => {
-    const sway = Math.sin(beat);
-    const step = Math.sin(beat * 2);
-    const spin = Math.sin(beat * 0.5);
+  /* ------------------------------------------------------------------ *
+   * Choreography
+   * ------------------------------------------------------------------ */
 
-    root.rotation.y = spin * 0.85;
+  const update = ({ beat, delta }: { t: number; beat: number; delta: number }) => {
+    const time = beat;
+    const pulse = Math.sin(time);
+    const step = Math.sin(time * 2);
+    const fast = Math.sin(time * 2.0 - 0.45);
+    const slow = Math.sin(time * 0.5);
 
-    // Twist travels up the spine: each joint lags the one below it, which is
-    // what stops the torso reading as a single rigid block.
-    hips.position.y = 1.10 + Math.abs(step) * 0.085;
-    hips.rotation.z = sway * 0.13;
-    hips.rotation.y = sway * 0.24;
-    waist.rotation.z = -sway * 0.07;
-    waist.rotation.y = -Math.sin(beat - 0.35) * 0.2;
-    chest.rotation.z = -Math.sin(beat - 0.5) * 0.11;
-    chest.rotation.y = -Math.sin(beat - 0.7) * 0.26;
-    chest.rotation.x = step * 0.05;
+    // Whole-body turn, with a deliberately smaller amplitude than the old
+    // character so the feet still feel planted.
+    root.rotation.y = slow * 0.62;
 
-    neck.rotation.z = Math.sin(beat - 0.9) * 0.09;
-    head.rotation.z = step * 0.1;
-    head.rotation.y = Math.sin(beat - 1.0) * 0.34;
-    head.rotation.x = -step * 0.07;
+    // Weight shifts side-to-side through the pelvis before the chest catches up.
+    const weight = Math.sin(time * 2);
+    const support = Math.max(0, Math.abs(weight));
+    hips.position.y = 1.13 + support * 0.045;
+    hips.position.x = weight * 0.045;
+    hips.rotation.z = pulse * 0.10;
+    hips.rotation.y = Math.sin(time * 2 - 0.18) * 0.18;
+    hips.rotation.x = Math.sin(time * 2 - 0.3) * 0.035;
 
-    // Skirt flares with how fast she is actually turning.
-    const turnRate = Math.abs(Math.cos(beat * 0.5)) * 0.55 + Math.abs(sway) * 0.45;
-    skirt.scale.set(1 + turnRate * 0.3, 1 - turnRate * 0.07, 1 + turnRate * 0.3);
-    skirt.rotation.y = -sway * 0.42;
-    // Layers lag by different amounts, so they separate as she spins.
-    outerPanel.rotation.z = sway * 0.075;
-    outerPanel.rotation.x = Math.sin(beat - 0.4) * 0.05;
-    innerPanel.rotation.z = Math.sin(beat - 0.6) * 0.05;
+    // Counter-rotation creates the loose, human spine seen in real dance.
+    waist.rotation.z = -Math.sin(time * 2 - 0.35) * 0.07;
+    waist.rotation.y = -Math.sin(time * 2 - 0.5) * 0.13;
+    waist.rotation.x = Math.sin(time * 2 - 0.55) * 0.025;
 
-    tail.rotation.x = 0.22 + step * 0.28;
-    tail.rotation.z = -sway * 0.38;
-    tailLinks.forEach((seg, i) => {
-      const lag = beat * 2 - (i + 1) * 0.65;
-      seg.rotation.x = Math.sin(lag) * 0.3;
-      seg.rotation.z = -Math.sin(lag * 0.5) * 0.26;
+    chest.rotation.z = -Math.sin(time * 2 - 0.48) * 0.085;
+    chest.rotation.y = -Math.sin(time * 2 - 0.62) * 0.19;
+    chest.rotation.x = Math.sin(time * 2 - 0.7) * 0.045;
+
+    // Head is calmer than the torso: eyes and face remain visually stable.
+    neck.rotation.z = Math.sin(time * 2 - 0.9) * 0.055;
+    neck.rotation.y = Math.sin(time * 2 - 0.75) * 0.08;
+    head.rotation.z = Math.sin(time * 2 - 1.05) * 0.075;
+    head.rotation.y = Math.sin(time * 2 - 1.2) * 0.20;
+    head.rotation.x = -Math.sin(time * 2 - 0.85) * 0.045;
+
+    // Subtle breathing prevents the upper body from looking frozen.
+    const breath = Math.sin(time * 0.55) * 0.012;
+    ribcage.scale.set(1 + breath, 1 + breath * 0.65, 1 + breath);
+
+    /* Skirt: delayed response to pelvis rotation and turn velocity. */
+    const turnVelocity = Math.abs(Math.cos(time * 0.5)) * 0.5 + Math.abs(pulse) * 0.35;
+    const skirtFlutter = Math.abs(fast) * 0.12;
+    skirt.scale.set(
+      1 + turnVelocity * 0.17 + skirtFlutter,
+      1 - turnVelocity * 0.025,
+      1 + turnVelocity * 0.17 + skirtFlutter,
+    );
+    skirt.rotation.y = -Math.sin(time * 2 - 0.25) * 0.17;
+    outerSkirt.rotation.z = Math.sin(time * 2 - 0.5) * 0.065;
+    outerSkirt.rotation.x = Math.sin(time * 2 - 0.35) * 0.045;
+    innerSkirt.rotation.z = Math.sin(time * 2 - 0.8) * 0.04;
+    innerSkirt.rotation.x = Math.sin(time * 2 - 0.7) * 0.028;
+
+    /* Hair trails behind the head instead of moving at the same time. */
+    pony.rotation.x = 0.18 + Math.sin(time * 2 - 1.0) * 0.18;
+    pony.rotation.z = -Math.sin(time * 2 - 0.85) * 0.25;
+    ponyLinks.forEach((part, i) => {
+      const lag = time * 2 - 1.05 - i * 0.38;
+      const amount = 0.25 - i * 0.025;
+      part.rotation.x = Math.sin(lag) * amount;
+      part.rotation.z = -Math.sin(lag * 0.82) * amount * 0.72;
     });
-    strands.forEach(({ strand, side }) => {
-      strand.rotation.z = side * 0.1 + Math.sin(beat * 2 - 0.4) * 0.16;
-      strand.rotation.x = Math.sin(beat * 2) * 0.12;
+
+    strands.forEach(({ strand, side, phase }) => {
+      const lag = time * 2 - 0.85 - phase;
+      strand.rotation.z = side * (0.1 + Math.sin(lag) * 0.07);
+      strand.rotation.x = Math.sin(lag * 0.9) * 0.08;
     });
 
-    arms.forEach(({ shoulder, forearm, hand, fingers, thumb, side }) => {
-      const phase = side > 0 ? beat : beat + Math.PI;
-      const raise = Math.sin(phase) * 0.5 + 0.5;
-      shoulder.rotation.z = side * (0.16 + raise * 2.05);
-      shoulder.rotation.x = Math.sin(phase * 2) * 0.42;
-      forearm.rotation.z = -side * (0.2 + Math.abs(Math.sin(phase * 2)) * 0.66);
-      forearm.rotation.x = Math.sin(phase * 2 + 0.6) * 0.28;
-      // Wrist leads, fingers follow a beat later.
-      hand.rotation.z = -side * Math.sin(phase * 2 + 0.9) * 0.4;
-      hand.rotation.x = Math.sin(phase * 2 + 1.1) * 0.25;
-      const curl = (Math.sin(phase * 2 + 1.4) * 0.5 + 0.5) * 0.7;
-      fingers.rotation.x = curl;
+    /* Arms: stagger the joints so motion flows shoulder -> wrist -> fingers. */
+    arms.forEach(({ shoulder, upperArm, elbow, forearm, wrist, hand, fingerGroups, thumb, side }) => {
+      const phase = time + (side > 0 ? 0 : Math.PI);
+      const wave = Math.sin(phase);
+      const wave2 = Math.sin(phase * 2 - 0.35);
+      const raised = wave * 0.5 + 0.5;
+
+      shoulder.rotation.z = side * (0.10 + raised * 1.35);
+      shoulder.rotation.x = Math.sin(phase * 2 - 0.4) * 0.26;
+      shoulder.rotation.y = side * Math.sin(phase - 0.3) * 0.14;
+
+      upperArm.rotation.z = -side * (0.12 + raised * 0.58);
+      upperArm.rotation.x = wave2 * 0.18;
+
+      // Elbow bend changes independently from the upper arm.
+      elbow.rotation.z = side * (0.08 + Math.max(0, -wave) * 0.65);
+      elbow.rotation.x = Math.sin(phase * 2 + 0.35) * 0.18;
+
+      forearm.rotation.z = -side * (0.08 + Math.abs(wave2) * 0.46);
+      forearm.rotation.x = Math.sin(phase * 2 + 0.75) * 0.20;
+
+      wrist.rotation.z = -side * Math.sin(phase * 2 + 1.0) * 0.26;
+      wrist.rotation.x = Math.sin(phase * 2 + 1.1) * 0.15;
+
+      hand.rotation.z = -side * Math.sin(phase * 2 + 1.15) * 0.16;
+      hand.rotation.x = Math.sin(phase * 2 + 1.3) * 0.10;
+
+      const curl = Math.max(0, Math.sin(phase * 2 + 1.2)) * 0.34;
+      fingerGroups.forEach((finger, index) => {
+        finger.rotation.x = curl * (0.75 + index * 0.08);
+        finger.rotation.z = side * Math.sin(phase * 2 + index * 0.17) * 0.035;
+      });
       thumb.rotation.x = curl * 0.5;
+      thumb.rotation.z = side * 0.16 + Math.sin(phase * 2) * 0.08;
     });
 
-    legs.forEach(({ thigh, shin, ankle, side }) => {
-      const phase = side > 0 ? beat : beat + Math.PI;
+    /* Legs: one side supports while the other gets the expressive step. */
+    legs.forEach(({ thigh, knee, shin, ankle, foot, side }) => {
+      const phase = time * 2 + (side > 0 ? 0 : Math.PI);
       const swing = Math.sin(phase);
-      thigh.rotation.x = swing * 0.36;
-      thigh.rotation.z = side * 0.05 + sway * 0.05;
-      shin.rotation.x = Math.max(0, -swing) * 0.52;
-      // Heel-to-toe roll: the foot stays level while the leg swings under it.
-      ankle.rotation.x = -swing * 0.3 + Math.max(0, -swing) * 0.25;
+      const lift = Math.max(0, -swing);
+      const supportAmount = Math.max(0, swing);
+
+      thigh.rotation.x = swing * 0.24 - lift * 0.08;
+      thigh.rotation.z = side * 0.025 + weight * side * 0.035;
+      thigh.rotation.y = Math.sin(phase - 0.35) * 0.06;
+
+      knee.rotation.z = side * lift * 0.07;
+      shin.rotation.x = lift * 0.38 + supportAmount * 0.035;
+      shin.rotation.z = -side * lift * 0.045;
+
+      // Heel/toe articulation keeps the foot from behaving like a rigid block.
+      ankle.rotation.x = -swing * 0.20 + lift * 0.28;
+      ankle.rotation.z = -side * lift * 0.05;
+      foot.rotation.x = -lift * 0.16 + supportAmount * 0.04;
     });
 
-    eyes.scale.y = 0.7 + Math.abs(Math.sin(beat * 0.6)) * 0.45;
+    // Small natural eye motion/blink. The custom eyes are the first two
+    // children of `face`, so traverse only the white-eye meshes by material.
+    face.traverse((object) => {
+      if (!(object instanceof THREE.Mesh)) return;
+      if (object.material !== eyeWhite) return;
+      object.scale.y = 0.92 + Math.abs(Math.sin(time * 0.72)) * 0.06;
+    });
+
+    // Keep delta meaningfully used for future frame-rate-independent additions.
+    void delta;
   };
 
   return {
