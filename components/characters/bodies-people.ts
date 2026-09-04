@@ -74,6 +74,50 @@ function addEllipsoid(
   return mesh;
 }
 
+/** A flared garment surface with radial folds modelled into its silhouette. */
+function flaredSkirtGeometry(
+  top: number,
+  hem: number,
+  drop: number,
+  pleats = 12,
+  phase = 0,
+) {
+  const segments = 64;
+  const rings = 18;
+  const positions: number[] = [];
+  const uvs: number[] = [];
+  const indices: number[] = [];
+
+  for (let ring = 0; ring <= rings; ring++) {
+    const t = ring / rings;
+    const eased = t * t * (3 - 2 * t);
+    const baseRadius = THREE.MathUtils.lerp(top, hem, eased);
+    for (let segment = 0; segment <= segments; segment++) {
+      const u = segment / segments;
+      const angle = u * Math.PI * 2;
+      const pleat = Math.sin(angle * pleats + phase) * 0.055 * Math.pow(t, 1.35);
+      const radius = baseRadius * (1 + pleat);
+      positions.push(Math.sin(angle) * radius, -t * drop, Math.cos(angle) * radius);
+      uvs.push(u, 1 - t);
+    }
+  }
+
+  for (let ring = 0; ring < rings; ring++) {
+    for (let segment = 0; segment < segments; segment++) {
+      const a = ring * (segments + 1) + segment;
+      const b = a + segments + 1;
+      indices.push(a, b, a + 1, b, b + 1, a + 1);
+    }
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
 export function buildDancer(scene: THREE.Scene, palette: Palette): CharacterRig {
   const { cyan, magenta } = palette;
 
@@ -190,6 +234,20 @@ export function buildDancer(scene: THREE.Scene, palette: Palette): CharacterRig 
     roughness: 0.55,
     metalness: 0,
   });
+  const pupilMaterial = new THREE.MeshPhysicalMaterial({
+    color: 0x120d0c,
+    roughness: 0.18,
+    clearcoat: 0.65,
+    clearcoatRoughness: 0.16,
+  });
+  const eyeGlint = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false });
+  const blush = new THREE.MeshPhysicalMaterial({
+    color: 0xe89b9e,
+    transparent: true,
+    opacity: 0.18,
+    roughness: 0.85,
+    depthWrite: false,
+  });
 
   /* ------------------------------------------------------------------ *
    * Pelvis and articulated spine
@@ -226,6 +284,17 @@ export function buildDancer(scene: THREE.Scene, palette: Palette): CharacterRig 
     [0, 0.06, 0],
   );
   bodice.scale.z = 0.78;
+
+  // Collar bones and shoulder contours stop the upper body reading as a tube.
+  for (const side of [-1, 1]) {
+    addMesh(
+      chest,
+      new THREE.CapsuleGeometry(0.018, 0.19, 5, 12),
+      skinDark,
+      [side * 0.105, 0.44, 0.205],
+      [0, 0, side * (Math.PI / 2 - 0.2)],
+    ).scale.z = 0.55;
+  }
 
   addMesh(
     chest,
@@ -278,6 +347,9 @@ export function buildDancer(scene: THREE.Scene, palette: Palette): CharacterRig 
     [Math.PI / 2, 0, 0],
   );
   addEllipsoid(head, skinDark, [0, -0.005, 0.305], [0.052, 0.04, 0.06], 1);
+  for (const side of [-1, 1]) {
+    addEllipsoid(head, darkFeature, [side * 0.022, -0.022, 0.352], [0.009, 0.006, 0.005], 1);
+  }
 
   // Eyes are intentionally separate from addFace: that shared helper is
   // designed for the stylized machine characters.
@@ -291,10 +363,25 @@ export function buildDancer(scene: THREE.Scene, palette: Palette): CharacterRig 
     eye.rotation.z = side * -0.05;
     eyeWhites.push({ mesh: eye, base: eye.scale.clone() });
 
-    const pupil = addEllipsoid(face, iris, [side * 0.105, 0.043, 0.024], [0.028, 0.032, 0.012], 1);
-    pupil.scale.z *= 0.7; // multiply, or the pupil becomes a 1.4-long spike
+    addEllipsoid(face, iris, [side * 0.105, 0.043, 0.024], [0.031, 0.035, 0.012], 1);
+    addEllipsoid(face, pupilMaterial, [side * 0.105, 0.043, 0.035], [0.014, 0.017, 0.007], 1);
+    addEllipsoid(face, eyeGlint, [side * 0.097, 0.054, 0.042], [0.0048, 0.006, 0.003], 1);
 
     addEllipsoid(face, darkFeature, [side * 0.105, 0.105, 0.005], [0.078, 0.012, 0.012], 1);
+  }
+
+  // Soft cheek colour and short upper lashes create a natural expression.
+  for (const side of [-1, 1]) {
+    addEllipsoid(face, blush, [side * 0.155, -0.035, 0.006], [0.065, 0.028, 0.008], 1);
+    for (let lash = 0; lash < 3; lash++) {
+      addMesh(
+        face,
+        new THREE.CapsuleGeometry(0.0035, 0.024, 3, 7),
+        darkFeature,
+        [side * (0.075 + lash * 0.027), 0.092 - Math.abs(lash - 1) * 0.005, 0.032],
+        [0, 0, side * (-0.42 + lash * 0.16)],
+      );
+    }
   }
 
   // Brows, lips and a tiny lower-lip highlight make the face read at camera distance.
@@ -441,6 +528,7 @@ export function buildDancer(scene: THREE.Scene, palette: Palette): CharacterRig 
       finger.add(tip);
       addRoundedLimb(tip, skin, [0, 0, 0], 0.011, 0.011, 0.007, 0.055, 12);
       fingerGroups.push(finger);
+      addEllipsoid(tip, eyeWhite, [0, -0.047, 0.012], [0.007, 0.012, 0.003], 1);
     }
 
     const thumb = new THREE.Group();
@@ -467,32 +555,26 @@ export function buildDancer(scene: THREE.Scene, palette: Palette): CharacterRig 
   skirt.position.y = 0.06;
   hips.add(skirt);
 
-  const skirtProfile = (top: number, hem: number, drop: number) => {
-    const points: THREE.Vector2[] = [];
-    for (let i = 0; i <= 14; i++) {
-      const t = i / 14;
-      const eased = t * t * (3 - 2 * t);
-      const radius = THREE.MathUtils.lerp(top, hem, eased);
-      points.push(new THREE.Vector2(radius, -t * drop));
-    }
-    return new THREE.LatheGeometry(points, 48);
-  };
+  const outerSkirt = addMesh(
+    skirt,
+    flaredSkirtGeometry(0.31, 0.52, 0.86, 12),
+    dress,
+    [0, 0, 0],
+  );
+  const innerSkirt = addMesh(
+    skirt,
+    flaredSkirtGeometry(0.285, 0.425, 0.71, 12, Math.PI / 12),
+    underskirt,
+    [0, -0.015, 0],
+  );
 
-  const outerSkirt = addMesh(skirt, skirtProfile(0.31, 0.50, 0.86), dress, [0, 0, 0]);
-  const innerSkirt = addMesh(skirt, skirtProfile(0.29, 0.40, 0.68), underskirt, [0, -0.015, 0]);
-
-  // Slightly offset decorative panels stop the skirt looking mathematically perfect.
-  for (let i = 0; i < 8; i++) {
-    const angle = (i / 8) * Math.PI * 2;
-    const panel = addMesh(
-      skirt,
-      new THREE.PlaneGeometry(0.22, 0.7, 1, 4),
-      i % 2 === 0 ? dress : underskirt,
-      [Math.sin(angle) * 0.34, -0.36, Math.cos(angle) * 0.34],
-      [0.02 * Math.sin(angle), angle, 0],
-    );
-    panel.scale.x = 0.9;
-  }
+  addMesh(
+    skirt,
+    new THREE.TorusGeometry(0.315, 0.028, 10, 48),
+    trim,
+    [0, 0.015, 0],
+    [Math.PI / 2, 0, 0],
+  );
 
   addMesh(
     skirt,
@@ -604,7 +686,6 @@ export function buildDancer(scene: THREE.Scene, palette: Palette): CharacterRig 
   const update = ({ beat, delta }: { t: number; beat: number; delta: number }) => {
     const time = beat;
     const pulse = Math.sin(time);
-    const step = Math.sin(time * 2);
     const fast = Math.sin(time * 2.0 - 0.45);
     const slow = Math.sin(time * 0.5);
 

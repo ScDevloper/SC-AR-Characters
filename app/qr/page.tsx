@@ -37,6 +37,7 @@ export default function QrSheetPage() {
     // On GitHub Pages the app lives under /SC-AR-Characters/, so the origin
     // alone would generate codes pointing at the wrong path.
     const base = import.meta.env.BASE_URL.replace(/\/+$/, "");
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setBaseUrl(`${window.location.origin}${base}`);
   }, []);
 
@@ -110,7 +111,7 @@ export default function QrSheetPage() {
       <header className="qr-noprint mx-auto mb-8 flex max-w-6xl flex-wrap items-end justify-between gap-4">
         <div>
           <div className="mb-4 flex items-center gap-3">
-            <img src="/sc-printing-logo.png" alt="SC Printing" className="h-12 w-12 rounded-xl bg-white p-1 shadow-lg" />
+            <img src={`${import.meta.env.BASE_URL}sc-printing-logo.png`} alt="SC Printing" className="h-12 w-12 rounded-xl bg-white p-1 shadow-lg" />
             <div>
               <p className="text-sm font-semibold text-white">Annual Get-Together</p>
               <p className="text-xs text-slate-400">SC Printing · AR Character Collection</p>
@@ -121,8 +122,8 @@ export default function QrSheetPage() {
             {cards.length} codes, generated automatically
           </h1>
           <p className="mt-2 max-w-xl text-sm text-slate-400">
-            One QR per character, built in the browser from the character registry. Add a character
-            to the registry and its code shows up here on the next load.
+            Scan a character QR, start marker AR, then keep its square tracking marker visible.
+            The character stays attached to that marker as the phone moves.
           </p>
         </div>
         <Button
@@ -202,6 +203,17 @@ export default function QrSheetPage() {
                 <path d={card.path} fill={card.dark} />
               </svg>
             </div>
+
+            <div className="mx-auto mt-3 max-w-[150px] rounded-xl bg-white p-2">
+              <img
+                src={`${import.meta.env.BASE_URL}ar-data/hiro.png`}
+                alt="AR tracking marker"
+                className="h-auto w-full"
+              />
+            </div>
+            <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+              AR tracking marker · keep visible
+            </p>
 
             <h2 className="mt-4 text-lg font-semibold">{card.character.name}</h2>
             <p className="text-xs text-slate-400">

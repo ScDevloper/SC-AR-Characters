@@ -9,6 +9,7 @@ export default function Home() {
 
   useEffect(() => {
     const model = new URLSearchParams(window.location.search).get("model");
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (isCharacterId(model)) setSelected(model);
   }, []);
 

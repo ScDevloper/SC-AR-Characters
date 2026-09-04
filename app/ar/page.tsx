@@ -7,7 +7,6 @@ import {
   Camera,
   CameraOff,
   Download,
-  QrCode,
   RefreshCcw,
   Lock,
   ScanLine,
@@ -16,8 +15,7 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { anchorFromPoints, type MarkerAnchor } from "@/components/characters/anchor";
-import { RobotScene } from "@/components/robot-scene";
+import { MarkerArScene } from "@/components/marker-ar-scene";
 import {
   CHARACTERS,
   CHARACTER_IDS,
@@ -27,7 +25,7 @@ import {
   type CharacterId,
 } from "@/components/characters/registry";
 
-type CameraState = "ready" | "starting" | "scanning" | "placed" | "error";
+type CameraState = "ready" | "starting" | "scanning" | "tracking" | "error";
 
 // The GitHub Pages bundle mounts this page alone under /SC-AR-Characters/,
 // so "/" and "/qr" do not exist there. Hide those links when we are not at
@@ -66,8 +64,8 @@ export default function ArPage() {
   const [cameraState, setCameraState] = useState<CameraState>("ready");
   const [message, setMessage] = useState("Scan a character QR or choose one below.");
   const glRef = useRef<HTMLCanvasElement | null>(null);
+  const markerVideoRef = useRef<HTMLVideoElement | null>(null);
   const [photo, setPhoto] = useState<string | null>(null);
-  const anchorRef = useRef<MarkerAnchor | null>(null);
   // A ref, not state: the ZXing callback closes over the render that created
   // it, so a state value read inside it would be permanently stale.
   const lockedRef = useRef(false);
@@ -78,6 +76,9 @@ export default function ArPage() {
   const handleCanvas = useCallback((canvas: HTMLCanvasElement | null) => {
     glRef.current = canvas;
   }, []);
+  const handleMarkerVideo = useCallback((video: HTMLVideoElement | null) => {
+    markerVideoRef.current = video;
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -86,19 +87,31 @@ export default function ArPage() {
       (isCharacterId(params.get("model")) ? (params.get("model") as CharacterId) : null) ??
       characterFromNumber(window.location.pathname.split("/").filter(Boolean).pop());
     if (model) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelected(model);
       handledRef.current = true;
-      setMessage(`${CHARACTERS[model].name} is ready for AR.`);
+      setMessage(`${CHARACTERS[model].name} is ready. Start AR, then aim at the square marker.`);
     }
 
     return () => controlsRef.current?.stop();
   }, []);
 
+  const stopScanner = () => {
+    controlsRef.current?.stop();
+    controlsRef.current = null;
+    if (videoRef.current) {
+      const stream = videoRef.current.srcObject;
+      if (stream instanceof MediaStream) stream.getTracks().forEach((track) => track.stop());
+      videoRef.current.srcObject = null;
+    }
+  };
+
   const selectCharacter = (id: CharacterId) => {
+    stopScanner();
     setSelected(id);
     handledRef.current = true;
-    setCameraState((current) => (current === "scanning" || current === "placed" ? "placed" : "ready"));
-    setMessage(`${CHARACTERS[id].name} selected.`);
+    setCameraState("ready");
+    setMessage(`${CHARACTERS[id].name} selected. Start AR, then aim at the square marker.`);
     const url = new URL(window.location.href);
     url.searchParams.set("model", id);
     window.history.replaceState({}, "", url);
@@ -113,11 +126,9 @@ export default function ArPage() {
 
     try {
       const { BrowserQRCodeReader } = await import("@zxing/browser");
-      // Scan continuously rather than once: every decode refreshes the
-      // marker position, which is what keeps the character on the code.
       const reader = new BrowserQRCodeReader(undefined, {
-        delayBetweenScanAttempts: 40,
-        delayBetweenScanSuccess: 40,
+        delayBetweenScanAttempts: 250,
+        delayBetweenScanSuccess: 800,
       });
 
       const controls = await reader.decodeFromConstraints(
@@ -131,29 +142,13 @@ export default function ArPage() {
         },
         videoRef.current,
         (result) => {
-          // While locked we skip the tracking work but leave the reader
-          // running: controls.stop() calls cleanVideoSource(), which nulls
-          // video.srcObject and would black out the feed we need for photos.
-          if (!result || lockedRef.current) return;
+          if (!result) return;
           const id = characterFromQr(result.getText());
           if (!id) {
             if (!handledRef.current) {
               setMessage("That QR is not an SC character code. Try another one.");
             }
             return;
-          }
-
-          // Track on every decode, including after the character is chosen.
-          const video = videoRef.current;
-          const gl = glRef.current;
-          if (video && gl) {
-            const reading = anchorFromPoints(
-              result.getResultPoints(),
-              video,
-              gl.clientWidth,
-              gl.clientHeight,
-            );
-            if (reading) anchorRef.current = reading;
           }
 
           if (handledRef.current) return;
@@ -163,8 +158,8 @@ export default function ArPage() {
       );
 
       controlsRef.current = controls;
-      setCameraState(selected ? "placed" : "scanning");
-      setMessage(selected ? `${CHARACTERS[selected].name} is now in your camera view.` : "Point the camera at an SC character QR.");
+      setCameraState("scanning");
+      setMessage("Point the camera at an SC character QR.");
     } catch (error) {
       const reason = error instanceof Error ? error.name : "CameraError";
       setCameraState("error");
@@ -176,11 +171,23 @@ export default function ArPage() {
     }
   };
 
+  const startMarkerAr = () => {
+    if (!selected) return;
+    stopScanner();
+    lockedRef.current = false;
+    setLocked(false);
+    setCameraState("tracking");
+    setMessage("Starting camera… Keep the square tracking marker in view.");
+  };
+
   const scanAnother = () => {
+    stopScanner();
+    lockedRef.current = false;
+    setLocked(false);
     setSelected(null);
     handledRef.current = false;
-    setCameraState("scanning");
-    setMessage("Point the camera at another SC character QR.");
+    setCameraState("ready");
+    setMessage("Start the scanner and point it at another character QR.");
     const url = new URL(window.location.href);
     url.searchParams.delete("model");
     window.history.replaceState({}, "", url);
@@ -189,11 +196,9 @@ export default function ArPage() {
   const stopCamera = () => {
     lockedRef.current = false;
     setLocked(false);
-    controlsRef.current?.stop();
-    controlsRef.current = null;
-    if (videoRef.current) videoRef.current.srcObject = null;
+    stopScanner();
     setCameraState("ready");
-    setMessage(selected ? `${CHARACTERS[selected].name} is ready for AR.` : "Camera stopped.");
+    setMessage(selected ? `${CHARACTERS[selected].name} is ready. Start AR to track the marker.` : "Camera stopped.");
   };
 
   const toggleLock = () => {
@@ -202,13 +207,13 @@ export default function ArPage() {
     setLocked(next);
     setMessage(
       next
-        ? "Locked. Point the camera anywhere and take your photo."
-        : "Tracking again - aim at the code.",
+        ? "Pose frozen for your photo. Tap Locked to resume marker tracking."
+        : "Tracking again — keep the square marker visible.",
     );
   };
 
   const capturePhoto = () => {
-    const video = videoRef.current;
+    const video = markerVideoRef.current ?? videoRef.current;
     const gl = glRef.current;
     if (!gl || !selected) return;
 
@@ -276,7 +281,8 @@ export default function ArPage() {
     savePhoto();
   };
 
-  const cameraActive = cameraState === "scanning" || cameraState === "placed";
+  const scannerActive = cameraState === "scanning" || cameraState === "starting";
+  const markerActive = cameraState === "tracking" && selected !== null;
 
   return (
     <main className="min-h-dvh bg-slate-950 text-white">
@@ -286,7 +292,7 @@ export default function ArPage() {
             SC Characters
           </span>
         ) : (
-          <a href="/" className="flex items-center gap-2 rounded-full border border-white/15 bg-slate-950/65 px-3 py-2 text-sm text-white backdrop-blur-xl">
+          <a href={BASE} className="flex items-center gap-2 rounded-full border border-white/15 bg-slate-950/65 px-3 py-2 text-sm text-white backdrop-blur-xl">
             <ArrowLeft className="size-4" /> Characters
           </a>
         )}
@@ -297,13 +303,28 @@ export default function ArPage() {
       </header>
 
       <section className="relative min-h-dvh overflow-hidden bg-black">
-        <video ref={videoRef} muted playsInline className="absolute inset-0 h-full w-full object-cover" />
-        {!cameraActive && <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,#172630,#050a0f_68%)]" />}
+        <video ref={videoRef} muted playsInline className={`absolute inset-0 h-full w-full object-cover ${scannerActive ? "block" : "hidden"}`} />
+        {!scannerActive && !markerActive && <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,#172630,#050a0f_68%)]" />}
 
-        {cameraActive && selected && (
-          <div className="absolute inset-0 z-10">
-            <RobotScene variant={selected} arMode onCanvasReady={handleCanvas} anchorRef={anchorRef} />
-          </div>
+        {markerActive && selected && (
+          <MarkerArScene
+            variant={selected}
+            onCanvasReady={handleCanvas}
+            onVideoReady={handleMarkerVideo}
+            pausedRef={lockedRef}
+            onTrackingChange={(found) => {
+              if (lockedRef.current) return;
+              setMessage(
+                found
+                  ? `${CHARACTERS[selected].name} locked to the physical marker.`
+                  : "Point the camera at the square marker printed beside the QR.",
+              );
+            }}
+            onError={(errorMessage) => {
+              setCameraState("error");
+              setMessage(errorMessage);
+            }}
+          />
         )}
 
         {cameraState === "scanning" && !selected && (
@@ -324,18 +345,18 @@ export default function ArPage() {
               <ScanLine className="size-3.5 text-cyan-300" /> {message}
             </div>
 
-            {!cameraActive ? (
-              <Button type="button" onClick={startCamera} className="h-12 rounded-full bg-cyan-300 px-6 text-slate-950 hover:bg-cyan-200">
-                <Camera /> {selected ? "Place character in AR" : "Start AR QR scanner"}
+            {!scannerActive && !markerActive ? (
+              <Button type="button" onClick={selected ? startMarkerAr : startCamera} className="h-12 rounded-full bg-cyan-300 px-6 text-slate-950 hover:bg-cyan-200">
+                <Camera /> {selected ? "Start marker AR" : "Start AR QR scanner"}
               </Button>
             ) : (
               <div className="flex flex-wrap justify-center gap-2">
-                {selected && (
+                {markerActive && (
                   <Button type="button" onClick={scanAnother} className="h-11 rounded-full bg-cyan-300 px-5 text-slate-950 hover:bg-cyan-200">
                     <RefreshCcw /> Scan another QR
                   </Button>
                 )}
-                {selected && (
+                {markerActive && (
                   <Button
                     type="button"
                     variant="outline"
@@ -347,7 +368,7 @@ export default function ArPage() {
                     {locked ? "Locked" : "Lock"}
                   </Button>
                 )}
-                {selected && (
+                {markerActive && (
                   <Button type="button" onClick={capturePhoto} className="h-11 rounded-full bg-white px-5 text-slate-950 hover:bg-slate-100">
                     <Camera /> Take photo
                   </Button>

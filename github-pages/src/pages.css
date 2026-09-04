@@ -1,4 +1,4 @@
 .github-pages-ar header > a,
-.github-pages-ar a[href="/qr"] {
+.github-pages-ar .qr-sheet-link {
   display: none;
 }
