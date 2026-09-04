@@ -252,6 +252,89 @@ export function addMesh(
   return mesh;
 }
 
+/**
+ * Diagonal yellow/black hazard chevrons, baked into a tileable canvas
+ * texture. Cheaper and far more convincing than stacking angled boxes -
+ * this is what actually reads as "industrial machine" on a counterweight,
+ * bumper edge, or guard rail.
+ */
+export function createHazardTexture(repeats = 4) {
+  const size = 256;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  ctx.fillStyle = "#15171c";
+  ctx.fillRect(0, 0, size, size);
+  ctx.fillStyle = "#ffcc00";
+  ctx.save();
+  ctx.translate(size / 2, size / 2);
+  ctx.rotate(Math.PI / 4);
+  ctx.translate(-size, -size);
+  const stripe = (size * 2) / 8;
+  for (let i = 0; i < 16; i += 2) {
+    ctx.fillRect(i * stripe, -size, stripe, size * 4);
+  }
+  ctx.restore();
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(repeats, 1);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+/** Slatted (roller-shutter) or woven (conveyor-belt) grooved surface. */
+export function createGrooveTexture(baseColor: string, lines = 14, tint = "rgba(0,0,0,0.22)") {
+  const size = 256;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  ctx.fillStyle = baseColor;
+  ctx.fillRect(0, 0, size, size);
+  ctx.strokeStyle = tint;
+  ctx.lineWidth = 3;
+  const step = size / lines;
+  for (let i = 1; i < lines; i++) {
+    ctx.beginPath();
+    ctx.moveTo(0, i * step);
+    ctx.lineTo(size, i * step);
+    ctx.stroke();
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+/** A small white rating/ID plate with one bold line and one detail line. */
+export function createPlateTexture(title: string, detail: string, accent = "#1c64f2") {
+  const canvas = document.createElement("canvas");
+  canvas.width = 384;
+  canvas.height = 192;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  ctx.fillStyle = "#eef2f5";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = "#20262d";
+  ctx.lineWidth = 8;
+  ctx.strokeRect(4, 4, canvas.width - 8, canvas.height - 8);
+  ctx.textAlign = "center";
+  ctx.fillStyle = accent;
+  ctx.font = "800 46px Arial, sans-serif";
+  ctx.fillText(title, canvas.width / 2, 92);
+  ctx.fillStyle = "#3a4048";
+  ctx.font = "600 28px Arial, sans-serif";
+  ctx.fillText(detail, canvas.width / 2, 140);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
 /** Two glowing eyes plus a smile, sized to whatever face plate you give it. */
 export function addFace(parent: THREE.Object3D, palette: Palette, scale = 1) {
   const eyes = new THREE.Group();

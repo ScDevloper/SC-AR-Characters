@@ -9,8 +9,10 @@ import {
   Download,
   QrCode,
   RefreshCcw,
+  Lock,
   ScanLine,
   Share2,
+  Unlock,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -66,6 +68,10 @@ export default function ArPage() {
   const glRef = useRef<HTMLCanvasElement | null>(null);
   const [photo, setPhoto] = useState<string | null>(null);
   const anchorRef = useRef<MarkerAnchor | null>(null);
+  // A ref, not state: the ZXing callback closes over the render that created
+  // it, so a state value read inside it would be permanently stale.
+  const lockedRef = useRef(false);
+  const [locked, setLocked] = useState(false);
 
   // Must be stable: RobotScene lists it as an effect dependency, so a new
   // function identity each render would tear down and rebuild the scene.
@@ -125,7 +131,10 @@ export default function ArPage() {
         },
         videoRef.current,
         (result) => {
-          if (!result) return;
+          // While locked we skip the tracking work but leave the reader
+          // running: controls.stop() calls cleanVideoSource(), which nulls
+          // video.srcObject and would black out the feed we need for photos.
+          if (!result || lockedRef.current) return;
           const id = characterFromQr(result.getText());
           if (!id) {
             if (!handledRef.current) {
@@ -178,11 +187,24 @@ export default function ArPage() {
   };
 
   const stopCamera = () => {
+    lockedRef.current = false;
+    setLocked(false);
     controlsRef.current?.stop();
     controlsRef.current = null;
     if (videoRef.current) videoRef.current.srcObject = null;
     setCameraState("ready");
     setMessage(selected ? `${CHARACTERS[selected].name} is ready for AR.` : "Camera stopped.");
+  };
+
+  const toggleLock = () => {
+    const next = !lockedRef.current;
+    lockedRef.current = next;
+    setLocked(next);
+    setMessage(
+      next
+        ? "Locked. Point the camera anywhere and take your photo."
+        : "Tracking again - aim at the code.",
+    );
   };
 
   const capturePhoto = () => {
@@ -311,6 +333,18 @@ export default function ArPage() {
                 {selected && (
                   <Button type="button" onClick={scanAnother} className="h-11 rounded-full bg-cyan-300 px-5 text-slate-950 hover:bg-cyan-200">
                     <RefreshCcw /> Scan another QR
+                  </Button>
+                )}
+                {selected && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={toggleLock}
+                    aria-pressed={locked}
+                    className={`h-11 rounded-full px-5 ${locked ? "border-cyan-300 bg-cyan-300/20 text-cyan-100 hover:bg-cyan-300/30 hover:text-white" : "border-white/20 bg-slate-950/65 text-white hover:bg-white/10 hover:text-white"}`}
+                  >
+                    {locked ? <Lock /> : <Unlock />}
+                    {locked ? "Locked" : "Lock"}
                   </Button>
                 )}
                 {selected && (

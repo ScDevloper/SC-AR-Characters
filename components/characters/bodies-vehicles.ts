@@ -1,6 +1,14 @@
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
-import { addFace, addMesh, type CharacterRig, type Palette } from "./kit";
+import {
+  addFace,
+  addMesh,
+  createGrooveTexture,
+  createHazardTexture,
+  createPlateTexture,
+  type CharacterRig,
+  type Palette,
+} from "./kit";
 
 /**
  * One body per character - nothing in here is shared. Each build returns the
@@ -40,6 +48,26 @@ export function buildTruck(scene: THREE.Scene, palette: Palette): CharacterRig {
     addMesh(body, new RoundedBoxGeometry(0.06, 0.28, 0.16, 2, 0.03), tailLight, [-2.06, -0.05, z]);
   }
 
+  // Roller-shutter door baked as a real slatted texture on the trailer side,
+  // instead of one flat painted panel.
+  const shutterTexture = createGrooveTexture("#eef2f5", 16, "rgba(20,25,32,0.28)");
+  if (shutterTexture) shutterTexture.repeat.set(1, 1);
+  const shutterMaterial = shutterTexture
+    ? new THREE.MeshStandardMaterial({ map: shutterTexture, metalness: 0.15, roughness: 0.55 })
+    : paper;
+  addMesh(body, new RoundedBoxGeometry(0.02, 1.3, 1.3, 2, 0.04), shutterMaterial, [-0.55, 0.28, 0.81]);
+
+  // License plate, and a diesel tank + running board hanging off the frame.
+  const plateTexture = createPlateTexture("SHIP-06", "SC PRINTING FLEET", "#1c64f2");
+  if (plateTexture) {
+    const plateMaterial = new THREE.MeshStandardMaterial({ map: plateTexture, roughness: 0.4, metalness: 0.05 });
+    addMesh(body, new RoundedBoxGeometry(0.02, 0.24, 0.44, 2, 0.02), plateMaterial, [-2.07, -0.35, 0]);
+  }
+  addMesh(body, new THREE.CylinderGeometry(0.16, 0.16, 0.55, 16), metal, [0.2, -0.5, 0.86], [0, 0, Math.PI / 2]);
+  for (const x of [1.1, -1.9]) {
+    addMesh(body, new RoundedBoxGeometry(0.5, 0.06, 0.18, 2, 0.02), darkMetal, [x, -0.62, 0.86]);
+  }
+
   const cab = new THREE.Group();
   cab.position.set(1.5, 0.05, 0);
   body.add(cab);
@@ -53,6 +81,10 @@ export function buildTruck(scene: THREE.Scene, palette: Palette): CharacterRig {
   });
   addMesh(cab, new RoundedBoxGeometry(0.12, 0.66, 1.3, 3, 0.1), windshield, [0.62, 0.24, 0]);
   addMesh(cab, new RoundedBoxGeometry(0.3, 0.2, 1.4, 2, 0.05), magenta, [0.5, -0.55, 0]);
+  // Side windows, same glass, so the cab isn't a solid box from three sides.
+  for (const z of [-0.775, 0.775]) {
+    addMesh(cab, new RoundedBoxGeometry(0.5, 0.5, 0.02, 2, 0.06), windshield, [0.2, 0.28, z]);
+  }
 
   // Grille and headlights up front.
   addMesh(cab, new RoundedBoxGeometry(0.06, 0.4, 1.1, 2, 0.02), darkMetal, [0.66, -0.15, 0]);
@@ -68,6 +100,14 @@ export function buildTruck(scene: THREE.Scene, palette: Palette): CharacterRig {
     const sign = z > 0 ? 1 : -1;
     addMesh(cab, new RoundedBoxGeometry(0.05, 0.05, 0.28, 2, 0.02), metal, [0.55, 0.28, z + sign * 0.03]);
     addMesh(cab, new RoundedBoxGeometry(0.04, 0.22, 0.16, 2, 0.02), darkMetal, [0.6, 0.24, z + sign * 0.16]);
+  }
+
+  // Amber roof marker lights, common on box trucks.
+  const markerLight = new THREE.MeshStandardMaterial({
+    color: 0xffaa22, emissive: 0xffaa22, emissiveIntensity: 1.8, roughness: 0.2,
+  });
+  for (const z of [-0.5, -0.17, 0.17, 0.5]) {
+    addMesh(cab, new THREE.SphereGeometry(0.035, 10, 8), markerLight, [0.3, 0.71, z]);
   }
 
   // Exhaust stack.
@@ -221,10 +261,14 @@ export function buildForklift(scene: THREE.Scene, palette: Palette): CharacterRi
   // Rear counterweight - real forklifts are deliberately tail-heavy, and
   // without this mass the silhouette reads as toy-light out back.
   addMesh(chassis, new RoundedBoxGeometry(0.5, 0.82, 1.3, 4, 0.1), darkMetal, [-1.62, 0.02, 0]);
-  const hazard = new THREE.MeshStandardMaterial({ color: 0x14151a, metalness: 0.2, roughness: 0.55 });
-  for (const y of [-0.22, 0.24]) {
-    addMesh(chassis, new RoundedBoxGeometry(0.06, 0.14, 1.32, 2, 0.02), hazard, [-1.62, y, 0], [0, 0, Math.PI / 5]);
+  const hazardTexture = createHazardTexture(3);
+  if (hazardTexture) {
+    const hazardMaterial = new THREE.MeshStandardMaterial({ map: hazardTexture, metalness: 0.1, roughness: 0.6 });
+    addMesh(chassis, new RoundedBoxGeometry(0.03, 0.5, 1.15, 2, 0.02), hazardMaterial, [-1.87, 0.02, 0]);
   }
+  // LPG-style vertical exhaust stack behind the cab.
+  addMesh(chassis, new THREE.CylinderGeometry(0.045, 0.045, 0.6, 10), darkMetal, [-0.85, 1.05, -0.62]);
+  addMesh(chassis, new THREE.CylinderGeometry(0.05, 0.05, 0.05, 10), metal, [-0.85, 1.35, -0.62]);
 
   // Overhead guard, which doubles as the character's cap.
   for (const [x, z] of [[-0.45, -0.55], [-0.45, 0.55], [-1.35, -0.55], [-1.35, 0.55]] as [number, number][]) {
@@ -263,6 +307,13 @@ export function buildForklift(scene: THREE.Scene, palette: Palette): CharacterRi
   }
   // Lift chain, run just in front of the rails.
   addMesh(mast, new RoundedBoxGeometry(0.03, 2.3, 0.03, 1, 0.005), darkMetal, [0.18, 1.15, 0]);
+  // Load-capacity rating plate, mounted low on the mast where real ones sit.
+  addMesh(mast, new RoundedBoxGeometry(0.02, 0.24, 0.4, 2, 0.02), darkMetal, [0.09, 0.55, 0]);
+  const plateTexture = createPlateTexture("ROLL-08", "CAP 1500KG", "#b45309");
+  if (plateTexture) {
+    const plateMaterial = new THREE.MeshStandardMaterial({ map: plateTexture, roughness: 0.4 });
+    addMesh(mast, new RoundedBoxGeometry(0.015, 0.22, 0.38, 2, 0.02), plateMaterial, [0.11, 0.55, 0]);
+  }
   const carriage = new THREE.Group();
   carriage.position.y = 0.2;
   mast.add(carriage);
@@ -278,6 +329,19 @@ export function buildForklift(scene: THREE.Scene, palette: Palette): CharacterRi
   const wheels: THREE.Mesh[] = [];
   for (const [x, z, r] of [[0.5, -0.7, 0.4], [0.5, 0.7, 0.4], [-1.2, -0.5, 0.3], [-1.2, 0.5, 0.3]] as [number, number, number][]) {
     wheels.push(addMesh(chassis, new THREE.CylinderGeometry(r, r, 0.28, 20), rubber, [x, -0.42, z], [0, 0, Math.PI / 2]));
+    // Hub and a ring of tread lugs, so tires aren't perfectly smooth drums.
+    addMesh(chassis, new THREE.CylinderGeometry(r * 0.42, r * 0.42, 0.3, 14), darkMetal, [x, -0.42, z], [0, 0, Math.PI / 2]);
+    const lugCount = 10;
+    for (let i = 0; i < lugCount; i++) {
+      const angle = (i / lugCount) * Math.PI * 2;
+      addMesh(
+        chassis,
+        new RoundedBoxGeometry(0.05, 0.05, 0.16, 1, 0.01),
+        rubber,
+        [x, -0.42 + Math.cos(angle) * r, z + Math.sin(angle) * r],
+        [angle, 0, 0],
+      );
+    }
   }
 
   const rest = () => {
@@ -512,6 +576,39 @@ export function buildGlueLine(scene: THREE.Scene, palette: Palette): CharacterRi
   addMesh(tank, new THREE.CylinderGeometry(0.185, 0.185, 0.22, 18), glueLevel, [0, -0.1, 0]);
   addMesh(tank, new RoundedBoxGeometry(0.08, 0.1, 0.02, 2, 0.01), darkMetal, [0, 0.3, 0.19]);
 
+  // A visible belt surface riding the rollers - previously the blanks
+  // floated over bare rubber drums with nothing physically carrying them.
+  const beltTexture = createGrooveTexture("#1b1e24", 22, "rgba(255,255,255,0.05)");
+  const beltMaterial = beltTexture
+    ? new THREE.MeshStandardMaterial({ map: beltTexture, metalness: 0.1, roughness: 0.75 })
+    : rubber;
+  addMesh(bed, new RoundedBoxGeometry(3.85, 0.03, 1.05, 2, 0.01), beltMaterial, [0, 0.39, 0]);
+
+  // Guard rails along both long edges, on posts, with a hazard-striped
+  // end cap at the infeed - the kind of detail that reads as "OSHA-real".
+  const hazardTexture = createHazardTexture(2);
+  const hazardMaterial = hazardTexture
+    ? new THREE.MeshStandardMaterial({ map: hazardTexture, metalness: 0.1, roughness: 0.6 })
+    : cyan;
+  for (const side of [-1, 1]) {
+    addMesh(root, new RoundedBoxGeometry(3.6, 0.05, 0.05, 2, 0.01), metal, [0, 1.35, side * 0.62]);
+    for (const x of [-1.75, 1.75]) {
+      addMesh(root, new THREE.CylinderGeometry(0.03, 0.03, 0.55, 8), metal, [x, 1.07, side * 0.62]);
+    }
+  }
+  addMesh(root, new RoundedBoxGeometry(0.3, 0.12, 1.3, 2, 0.02), hazardMaterial, [-2.02, 0.55, 0]);
+
+  // Emergency-stop button on its own stalk near the operator side.
+  const eStop = new THREE.Group();
+  eStop.position.set(-1.4, 1.1, 0.68);
+  root.add(eStop);
+  addMesh(eStop, new THREE.CylinderGeometry(0.025, 0.025, 0.22, 10), metal, [0, 0, 0]);
+  addMesh(eStop, new THREE.CylinderGeometry(0.07, 0.07, 0.04, 16), darkMetal, [0, 0.13, 0]);
+  const stopButton = new THREE.MeshStandardMaterial({
+    color: 0xff1f3d, emissive: 0xff1f3d, emissiveIntensity: 0.7, roughness: 0.35,
+  });
+  addMesh(eStop, new THREE.CylinderGeometry(0.055, 0.055, 0.05, 16), stopButton, [0, 0.18, 0]);
+
   // Blanks travelling along the bed with their flaps folding up.
   const blanks = [0, 1, 2].map((i) => {
     const blank = new THREE.Group();
@@ -544,6 +641,13 @@ export function buildGlueLine(scene: THREE.Scene, palette: Palette): CharacterRi
   addMesh(head, new RoundedBoxGeometry(0.74, 0.46, 0.1, 4, 0.1), palette.screen, [0, 0, 0.42]);
   const eyes = addFace(head, palette, 0.64);
   eyes.position.z = 0.47;
+
+  // Nameplate decal on the side of the head unit.
+  const headPlateTexture = createPlateTexture("GLUE-11", "SC PRINTING", "#16a34a");
+  if (headPlateTexture) {
+    const headPlateMaterial = new THREE.MeshStandardMaterial({ map: headPlateTexture, roughness: 0.4 });
+    addMesh(head, new RoundedBoxGeometry(0.02, 0.22, 0.4, 2, 0.02), headPlateMaterial, [-0.475, -0.15, 0]);
+  }
 
   // Small control panel on the support post - buttons and status lights.
   const panel = new THREE.Group();

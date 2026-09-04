@@ -42,3 +42,6 @@ next-env.d.ts
 /work/
 
 *.tsbuildinfo
+
+# patch files handed over for review
+*.patch
