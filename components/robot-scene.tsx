@@ -5,7 +5,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { Maximize2, Pause, Play, RotateCcw, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { addBrandBadge, createPalette, type CharacterRig } from "@/components/characters/kit";
+import { createPalette, type CharacterRig } from "@/components/characters/kit";
 import { buildHumanoid } from "@/components/characters/humanoid";
 import {
   buildArm,
@@ -285,17 +285,6 @@ export function RobotScene({
     const targetHome = rig.frame?.target ?? DEFAULT_TARGET;
     rig.rest();
     rig.root.updateMatrixWorld(true);
-    const characterBounds = new THREE.Box3().setFromObject(rig.root);
-    const characterTop = Number.isFinite(characterBounds.max.y)
-      ? characterBounds.max.y
-      : targetHome[1] + 2;
-    const floatingBrandHome = new THREE.Vector3(0, characterTop + 1.05, -0.3);
-    const floatingBrand = addBrandBadge(scene, {
-      position: [floatingBrandHome.x, floatingBrandHome.y, floatingBrandHome.z],
-      size: [3.05, 0.95],
-      depth: 0.2,
-      accent: variantInfo.accent,
-    });
     const anchorTarget = new THREE.Vector3();
     let anchorFit = 1;
     const clock = new THREE.Clock();
@@ -354,10 +343,6 @@ export function RobotScene({
       floorRing.rotation.z -= delta * 0.15;
       ringMaterial.opacity = 0.2 + Math.sin(t * 2.4) * 0.08;
       controls.update();
-      if (floatingBrand) {
-        floatingBrand.position.y = floatingBrandHome.y + Math.sin(t * 1.15) * 0.045;
-        floatingBrand.lookAt(camera.position);
-      }
       if (arMode && anchorRef) {
         const anchor = anchorRef.current;
         if (anchor && performance.now() - anchor.at < ANCHOR_GRACE_MS) {
