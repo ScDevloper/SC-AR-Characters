@@ -56,8 +56,10 @@ function addRoundedLimb(
   mid: number,
   bottom: number,
   length: number,
+  /** Radial segments. Drop it for small parts - fingers do not need 20. */
+  segments = 20,
 ) {
-  return addMesh(parent, limbGeometry(top, mid, bottom, length), material, position);
+  return addMesh(parent, limbGeometry(top, mid, bottom, length, segments), material, position);
 }
 
 function addEllipsoid(
@@ -211,6 +213,9 @@ export function buildDancer(scene: THREE.Scene, palette: Palette): CharacterRig 
   waist.add(chest);
 
   const ribcage = addEllipsoid(chest, skin, [0, 0.2, 0], [0.34, 0.46, 0.25], 1);
+  // These ellipsoids carry their shape in `scale`, so anything animating them
+  // must MULTIPLY that base - assigning an absolute value throws the shape away.
+  const ribcageBase = ribcage.scale.clone();
   ribcage.rotation.x = Math.PI;
 
   // Dress bodice follows the rib cage instead of looking like a straight tube.
@@ -280,9 +285,11 @@ export function buildDancer(scene: THREE.Scene, palette: Palette): CharacterRig 
   face.position.set(0, 0.12, 0.25);
   head.add(face);
 
+  const eyeWhites: { mesh: THREE.Mesh; base: THREE.Vector3 }[] = [];
   for (const side of [-1, 1]) {
     const eye = addEllipsoid(face, eyeWhite, [side * 0.105, 0.045, 0], [0.078, 0.052, 0.026], 1);
     eye.rotation.z = side * -0.05;
+    eyeWhites.push({ mesh: eye, base: eye.scale.clone() });
 
     const pupil = addEllipsoid(face, iris, [side * 0.105, 0.043, 0.024], [0.028, 0.032, 0.012], 1);
     pupil.scale.z = 0.7;
@@ -578,12 +585,16 @@ export function buildDancer(scene: THREE.Scene, palette: Palette): CharacterRig 
       thumb.rotation.set(0, 0, 0);
     });
 
-    legs.forEach(({ thigh, knee, shin, ankle }) => {
+    legs.forEach(({ thigh, knee, shin, ankle, foot }) => {
       thigh.rotation.set(0, 0, 0);
       knee.rotation.set(0, 0, 0);
       shin.rotation.set(0, 0, 0);
       ankle.rotation.set(0, 0, 0);
+      foot.rotation.set(0, 0, 0);
     });
+
+    ribcage.scale.copy(ribcageBase);
+    eyeWhites.forEach(({ mesh, base }) => mesh.scale.copy(base));
   };
 
   /* ------------------------------------------------------------------ *
@@ -628,7 +639,11 @@ export function buildDancer(scene: THREE.Scene, palette: Palette): CharacterRig 
 
     // Subtle breathing prevents the upper body from looking frozen.
     const breath = Math.sin(time * 0.55) * 0.012;
-    ribcage.scale.set(1 + breath, 1 + breath * 0.65, 1 + breath);
+    ribcage.scale.set(
+      ribcageBase.x * (1 + breath),
+      ribcageBase.y * (1 + breath * 0.65),
+      ribcageBase.z * (1 + breath),
+    );
 
     /* Skirt: delayed response to pelvis rotation and turn velocity. */
     const turnVelocity = Math.abs(Math.cos(time * 0.5)) * 0.5 + Math.abs(pulse) * 0.35;
@@ -717,12 +732,12 @@ export function buildDancer(scene: THREE.Scene, palette: Palette): CharacterRig 
       foot.rotation.x = -lift * 0.16 + supportAmount * 0.04;
     });
 
-    // Small natural eye motion/blink. The custom eyes are the first two
-    // children of `face`, so traverse only the white-eye meshes by material.
-    face.traverse((object) => {
-      if (!(object instanceof THREE.Mesh)) return;
-      if (object.material !== eyeWhite) return;
-      object.scale.y = 0.92 + Math.abs(Math.sin(time * 0.72)) * 0.06;
+    // Blink. Scales the eye's own build height rather than assigning an
+    // absolute value, and uses the collected list instead of traversing the
+    // whole face every frame.
+    const lid = 0.92 + Math.abs(Math.sin(time * 0.72)) * 0.06;
+    eyeWhites.forEach(({ mesh, base }) => {
+      mesh.scale.set(base.x, base.y * lid, base.z);
     });
 
     // Keep delta meaningfully used for future frame-rate-independent additions.
