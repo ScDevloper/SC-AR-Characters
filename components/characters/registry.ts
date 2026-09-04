@@ -45,6 +45,8 @@ export type CharacterConfig = {
   body: BodyKind;
 };
 
+export type AnimationMode = "idle" | "work" | "dance";
+
 export const CHARACTERS = {
   laminate: {
     name: "LamiBot",

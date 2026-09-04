@@ -59,6 +59,7 @@ export function enhanceMaterials(root: THREE.Object3D, seed = 1) {
       index += 1;
 
       if (material instanceof THREE.MeshStandardMaterial) {
+        material.dithering = true;
         // The palette sets this per surface now; only fill in materials a
         // character body built inline without choosing a value.
         if (material.envMapIntensity === 1) {
@@ -67,6 +68,16 @@ export function enhanceMaterials(root: THREE.Object3D, seed = 1) {
         // Deterministic jitter so two panels never share an identical finish.
         const jitter = ((Math.sin(index * 12.9898) * 43758.5453) % 1) * 0.06;
         material.roughness = THREE.MathUtils.clamp(material.roughness + jitter, 0.05, 0.95);
+
+        // Stronger separation between machined metal, painted panels and soft
+        // parts makes the retained characters readable on a small AR screen.
+        if (material.metalness > 0.45) {
+          material.envMapIntensity = Math.max(material.envMapIntensity, 1.25);
+          material.roughness = THREE.MathUtils.clamp(material.roughness, 0.16, 0.62);
+        } else if (!material.transparent) {
+          material.envMapIntensity = Math.max(material.envMapIntensity, 0.82);
+          material.color.offsetHSL(0, 0.025, 0.008);
+        }
       }
 
       if (material instanceof THREE.MeshPhysicalMaterial) {

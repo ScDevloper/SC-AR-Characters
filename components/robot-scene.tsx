@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { Maximize2, Pause, Play, RotateCcw, Sparkles } from "lucide-react";
+import { Cog, Maximize2, Moon, Music2, RotateCcw, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { createCharacter } from "@/components/characters/create-character";
 import {
@@ -12,7 +12,7 @@ import {
   upgradeShadows,
 } from "@/components/characters/realism";
 import { createPostStack, type PostStack } from "@/components/render/post";
-import { CHARACTERS, CHARACTER_IDS, type CharacterId } from "@/components/characters/registry";
+import { CHARACTERS, CHARACTER_IDS, type AnimationMode, type CharacterId } from "@/components/characters/registry";
 import {
   ANCHOR_DISTANCE_K,
   ANCHOR_GRACE_MS,
@@ -57,9 +57,10 @@ export function RobotScene({
 }) {
   const variantInfo = CHARACTERS[variant];
   const mountRef = useRef<HTMLDivElement>(null);
-  const animationRef = useRef({ dancing: true, start: 0 });
+  const animationRef = useRef<{ mode: AnimationMode; start: number }>({ mode: "dance", start: 0 });
   const resetRef = useRef<(() => void) | null>(null);
-  const [dancing, setDancing] = useState(true);
+  const poseRef = useRef<(() => void) | null>(null);
+  const [animationMode, setAnimationMode] = useState<AnimationMode>("dance");
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -204,6 +205,10 @@ export function RobotScene({
     };
     resetPose();
     resetRef.current = resetPose;
+    poseRef.current = () => {
+      rig.rest();
+      turntable.rotation.y = 0;
+    };
 
     // Bloom and AO render through an opaque target, which would destroy the
     // alpha that lets the camera feed show through - studio mode only.
@@ -237,14 +242,18 @@ export function RobotScene({
       const delta = Math.min(clock.getDelta(), 0.05);
       const t = (performance.now() - animationRef.current.start) / 1000;
 
-      if (animationRef.current.dancing) {
-        rig.update({ t, beat: t * tempo, delta });
+      const mode = animationRef.current.mode;
+      if (mode !== "idle") {
+        const activity = mode === "work" ? 0.48 : 1;
+        rig.update({ t: t * activity, beat: t * tempo * activity, delta });
       }
 
       rig.spinners.forEach(({ part, axis, speed }) => {
-        part.rotation[axis] += delta * speed;
+        const activity = mode === "idle" ? 0.08 : mode === "work" ? 0.72 : 1;
+        part.rotation[axis] += delta * speed * activity;
       });
-      if (animationRef.current.dancing) turntable.rotation.y += delta * spinSpeed;
+      if (mode === "dance") turntable.rotation.y += delta * spinSpeed;
+      if (mode === "idle") turntable.rotation.y = Math.sin(t * 0.35) * 0.08;
       floorRing.rotation.z -= delta * 0.15;
       ringMaterial.opacity = 0.2 + Math.sin(t * 2.4) * 0.08;
       controls.update();
@@ -313,15 +322,19 @@ export function RobotScene({
       renderer.domElement.remove();
       onCanvasReady?.(null);
       resetRef.current = null;
+      poseRef.current = null;
     };
   }, [arMode, realistic, variant, variantInfo.accent, variantInfo.secondary, onCanvasReady, anchorRef]);
 
-  const toggleDance = () => {
-    const next = !dancing;
-    setDancing(next);
-    animationRef.current.dancing = next;
-    if (next) animationRef.current.start = performance.now();
+  const changeAnimationMode = (mode: AnimationMode) => {
+    setAnimationMode(mode);
   };
+
+  useEffect(() => {
+    animationRef.current.mode = animationMode;
+    animationRef.current.start = performance.now();
+    poseRef.current?.();
+  }, [animationMode]);
 
   const reset = () => {
     animationRef.current.start = performance.now();
@@ -355,14 +368,18 @@ export function RobotScene({
 
       <div className="absolute inset-x-0 bottom-0 flex justify-center p-4 sm:p-6">
         <div className="control-dock">
-          <Button
-            type="button"
-            onClick={toggleDance}
-            className="h-11 rounded-full bg-cyan-300 px-5 text-slate-950 hover:bg-cyan-200"
-          >
-            {dancing ? <Pause /> : <Play />}
-            {dancing ? "Pause dance" : "Funny dance"}
-          </Button>
+          {(["idle", "work", "dance"] as AnimationMode[]).map((mode) => (
+            <Button
+              key={mode}
+              type="button"
+              onClick={() => changeAnimationMode(mode)}
+              aria-pressed={animationMode === mode}
+              className={`h-11 rounded-full px-4 capitalize ${animationMode === mode ? "bg-cyan-300 text-slate-950 hover:bg-cyan-200" : "bg-transparent text-white hover:bg-white/10"}`}
+            >
+              {mode === "idle" ? <Moon /> : mode === "work" ? <Cog /> : <Music2 />}
+              {mode}
+            </Button>
+          ))}
           <Button
             type="button"
             variant="ghost"

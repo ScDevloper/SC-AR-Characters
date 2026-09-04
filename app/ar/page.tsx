@@ -7,9 +7,12 @@ import {
   Camera,
   CameraOff,
   Circle,
+  Cog,
   Download,
   RefreshCcw,
   Lock,
+  Moon,
+  Music2,
   ScanLine,
   Share2,
   Square,
@@ -26,6 +29,7 @@ import {
   characterFromNumber,
   isCharacterId,
   type CharacterId,
+  type AnimationMode,
 } from "@/components/characters/registry";
 
 type CameraState = "ready" | "starting" | "scanning" | "tracking" | "error";
@@ -76,6 +80,8 @@ export default function ArPage() {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [recordedVideo, setRecordedVideo] = useState<{ url: string; type: string } | null>(null);
+  const animationModeRef = useRef<AnimationMode>("dance");
+  const [animationMode, setAnimationMode] = useState<AnimationMode>("dance");
   // A ref, not state: the ZXing callback closes over the render that created
   // it, so a state value read inside it would be permanently stale.
   const lockedRef = useRef(false);
@@ -89,6 +95,15 @@ export default function ArPage() {
   const handleMarkerVideo = useCallback((video: HTMLVideoElement | null) => {
     markerVideoRef.current = video;
   }, []);
+
+  const changeAnimationMode = (mode: AnimationMode) => {
+    setAnimationMode(mode);
+    setMessage(`${mode === "idle" ? "Idle" : mode === "work" ? "Working" : "Dance"} animation selected.`);
+  };
+
+  useEffect(() => {
+    animationModeRef.current = animationMode;
+  }, [animationMode]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -462,6 +477,7 @@ export default function ArPage() {
             onCanvasReady={handleCanvas}
             onVideoReady={handleMarkerVideo}
             pausedRef={lockedRef}
+            animationModeRef={animationModeRef}
             onTrackingChange={(found) => {
               if (lockedRef.current) return;
               setMessage(
@@ -501,6 +517,19 @@ export default function ArPage() {
               </Button>
             ) : (
               <div className="flex flex-wrap justify-center gap-2">
+                {markerActive && !isRecording && (["idle", "work", "dance"] as AnimationMode[]).map((mode) => (
+                  <Button
+                    key={mode}
+                    type="button"
+                    variant="outline"
+                    onClick={() => changeAnimationMode(mode)}
+                    aria-pressed={animationMode === mode}
+                    className={`h-11 rounded-full px-4 capitalize ${animationMode === mode ? "border-cyan-300 bg-cyan-300/20 text-cyan-100 hover:bg-cyan-300/30 hover:text-white" : "border-white/20 bg-slate-950/65 text-white hover:bg-white/10 hover:text-white"}`}
+                  >
+                    {mode === "idle" ? <Moon /> : mode === "work" ? <Cog /> : <Music2 />}
+                    {mode}
+                  </Button>
+                ))}
                 {markerActive && !isRecording && (
                   <Button type="button" onClick={scanAnother} className="h-11 rounded-full bg-cyan-300 px-5 text-slate-950 hover:bg-cyan-200">
                     <RefreshCcw /> Scan another QR

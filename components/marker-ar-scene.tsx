@@ -14,7 +14,7 @@ import {
   enhanceMaterials,
   upgradeShadows,
 } from "@/components/characters/realism";
-import { CHARACTERS, CHARACTER_IDS, type CharacterId } from "@/components/characters/registry";
+import { CHARACTERS, CHARACTER_IDS, type AnimationMode, type CharacterId } from "@/components/characters/registry";
 
 type MarkerArSceneProps = {
   variant: CharacterId;
@@ -23,6 +23,7 @@ type MarkerArSceneProps = {
   onCanvasReady?: (canvas: HTMLCanvasElement | null) => void;
   onVideoReady?: (video: HTMLVideoElement | null) => void;
   pausedRef?: { current: boolean };
+  animationModeRef?: { current: AnimationMode };
 };
 
 /** Camera-backed marker scene. The character transform follows the printed Hiro marker. */
@@ -33,6 +34,7 @@ export function MarkerArScene({
   onCanvasReady,
   onVideoReady,
   pausedRef,
+  animationModeRef,
 }: MarkerArSceneProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const trackingCallbackRef = useRef(onTrackingChange);
@@ -193,6 +195,7 @@ export function MarkerArScene({
     const clock = new THREE.Clock();
     const start = performance.now();
     const tempo = 2.85 + CHARACTER_IDS.indexOf(variant) * 0.12;
+    let lastMode = animationModeRef?.current ?? "dance";
 
     const animate = () => {
       frame = requestAnimationFrame(animate);
@@ -209,9 +212,18 @@ export function MarkerArScene({
       }
       if (visible) {
         const t = (performance.now() - start) / 1000;
-        rig.update({ t, beat: t * tempo, delta });
+        const mode = animationModeRef?.current ?? "dance";
+        if (mode !== lastMode) {
+          rig.rest();
+          lastMode = mode;
+        }
+        if (mode !== "idle") {
+          const activity = mode === "work" ? 0.48 : 1;
+          rig.update({ t: t * activity, beat: t * tempo * activity, delta });
+        }
         rig.spinners.forEach(({ part, axis, speed }) => {
-          part.rotation[axis] += delta * speed;
+          const activity = mode === "idle" ? 0.08 : mode === "work" ? 0.72 : 1;
+          part.rotation[axis] += delta * speed * activity;
         });
       }
       renderer.render(scene, camera);
@@ -236,7 +248,7 @@ export function MarkerArScene({
       renderer.dispose();
       mount.replaceChildren();
     };
-  }, [onCanvasReady, onVideoReady, pausedRef, variant]);
+  }, [animationModeRef, onCanvasReady, onVideoReady, pausedRef, variant]);
 
   return <div ref={mountRef} className="absolute inset-0 overflow-hidden bg-black" />;
 }
