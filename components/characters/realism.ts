@@ -59,15 +59,24 @@ export function enhanceMaterials(root: THREE.Object3D, seed = 1) {
       index += 1;
 
       if (material instanceof THREE.MeshStandardMaterial) {
-        material.envMapIntensity = material.metalness > 0.5 ? 1.15 : 0.7;
+        // The palette sets this per surface now; only fill in materials a
+        // character body built inline without choosing a value.
+        if (material.envMapIntensity === 1) {
+          material.envMapIntensity = material.metalness > 0.5 ? 1.15 : 0.7;
+        }
         // Deterministic jitter so two panels never share an identical finish.
         const jitter = ((Math.sin(index * 12.9898) * 43758.5453) % 1) * 0.06;
         material.roughness = THREE.MathUtils.clamp(material.roughness + jitter, 0.05, 0.95);
       }
 
       if (material instanceof THREE.MeshPhysicalMaterial) {
-        material.clearcoat = Math.max(material.clearcoat, 0.35);
-        material.clearcoatRoughness = Math.min(material.clearcoatRoughness || 0.2, 0.25);
+        // Only deepen a coat that already exists. Forcing one onto every
+        // physical material would put a gloss finish on rubber and board -
+        // exactly the plastic look the palette now avoids.
+        if (material.clearcoat > 0) {
+          material.clearcoat = Math.max(material.clearcoat, 0.35);
+          material.clearcoatRoughness = Math.min(material.clearcoatRoughness || 0.2, 0.25);
+        }
       }
     });
   });

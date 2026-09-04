@@ -178,40 +178,151 @@ export function addBrandBadge(parent: THREE.Object3D, options: BrandBadgeOptions
   return sign;
 }
 
+/* ------------------------------------------------------------------ *
+ * Shared procedural surface maps
+ *
+ * Uniform roughness is the biggest "CG" tell: every panel on a real machine
+ * carries brush marks, wear and fingerprints, so highlights break up across a
+ * surface instead of sitting perfectly even.
+ *
+ * Built once at module level and shared by all 26 characters - a canvas
+ * texture per character would multiply GPU memory for no visual gain.
+ * ------------------------------------------------------------------ */
+
+type SurfaceMaps = { brushed: THREE.Texture; wear: THREE.Texture };
+let surfaceMaps: SurfaceMaps | null | undefined;
+
+function paintTexture(
+  size: number,
+  repeat: number,
+  draw: (ctx: CanvasRenderingContext2D, size: number) => void,
+): THREE.Texture {
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  draw(canvas.getContext("2d") as CanvasRenderingContext2D, size);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(repeat, repeat);
+  texture.anisotropy = 4;
+  return texture;
+}
+
+function getSurfaceMaps(): SurfaceMaps | null {
+  if (surfaceMaps !== undefined) return surfaceMaps;
+  if (typeof document === "undefined") {
+    surfaceMaps = null;   // server render or headless test
+    return null;
+  }
+
+  // Brushed metal: fine directional streaks, so highlights smear along the
+  // grain instead of forming a mirror.
+  const brushed = paintTexture(256, 3, (ctx, size) => {
+    ctx.fillStyle = "#d8d8d8";
+    ctx.fillRect(0, 0, size, size);
+    for (let i = 0; i < 900; i++) {
+      const shade = 150 + Math.floor(Math.random() * 105);
+      ctx.strokeStyle = `rgba(${shade},${shade},${shade},0.5)`;
+      ctx.lineWidth = Math.random() < 0.85 ? 1 : 2;
+      const y = Math.random() * size;
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(size, y + (Math.random() - 0.5) * 2);
+      ctx.stroke();
+    }
+  });
+
+  // Wear: soft blotches for rubber, board and painted panels.
+  const wear = paintTexture(256, 2, (ctx, size) => {
+    ctx.fillStyle = "#cfcfcf";
+    ctx.fillRect(0, 0, size, size);
+    for (let i = 0; i < 260; i++) {
+      const shade = 120 + Math.floor(Math.random() * 135);
+      ctx.fillStyle = `rgba(${shade},${shade},${shade},0.32)`;
+      ctx.beginPath();
+      ctx.arc(Math.random() * size, Math.random() * size, 4 + Math.random() * 26, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  });
+
+  surfaceMaps = { brushed, wear };
+  return surfaceMaps;
+}
+
 export function createPalette(accent: number, secondary: number) {
-  const metal = new THREE.MeshStandardMaterial({
+  const maps = getSurfaceMaps();
+
+  // Brushed aluminium. `anisotropy` stretches the specular highlight along the
+  // grain - the property that separates machined metal from chrome.
+  const metal = new THREE.MeshPhysicalMaterial({
     color: 0x9aa3ad,
-    metalness: 0.82,
-    roughness: 0.24,
+    metalness: 0.95,
+    roughness: 0.34,
+    roughnessMap: maps?.brushed ?? null,
+    anisotropy: 0.6,
+    anisotropyRotation: Math.PI / 2,
+    clearcoat: 0.22,
+    clearcoatRoughness: 0.35,
+    envMapIntensity: 1.2,
   });
-  const darkMetal = new THREE.MeshStandardMaterial({
+  // Painted steel: a clearcoat over a duller base, which is how machine
+  // housings behave under shop lighting.
+  const darkMetal = new THREE.MeshPhysicalMaterial({
     color: 0x20262d,
-    metalness: 0.75,
-    roughness: 0.28,
+    metalness: 0.62,
+    roughness: 0.42,
+    roughnessMap: maps?.wear ?? null,
+    clearcoat: 0.65,
+    clearcoatRoughness: 0.22,
+    specularIntensity: 0.7,
+    envMapIntensity: 1.0,
   });
-  const rubber = new THREE.MeshStandardMaterial({
+  // Rubber scatters rather than reflects: high roughness, faint sheen, and
+  // deliberately no clearcoat.
+  const rubber = new THREE.MeshPhysicalMaterial({
     color: 0x090b0e,
-    metalness: 0.18,
-    roughness: 0.48,
+    metalness: 0.0,
+    roughness: 0.92,
+    roughnessMap: maps?.wear ?? null,
+    sheen: 0.25,
+    sheenRoughness: 0.9,
+    sheenColor: new THREE.Color(0x2a2f36),
+    envMapIntensity: 0.45,
   });
   const screen = new THREE.MeshPhysicalMaterial({
     color: 0x02070b,
     metalness: 0.18,
-    roughness: 0.08,
+    roughness: 0.06,
     clearcoat: 1,
-    clearcoatRoughness: 0.08,
+    clearcoatRoughness: 0.05,
+    // Faint oil-slick tint across the glass, as on a real coated display.
+    iridescence: 0.35,
+    iridescenceIOR: 1.6,
+    specularIntensity: 1.0,
+    envMapIntensity: 1.4,
   });
-  const paper = new THREE.MeshStandardMaterial({
+  // Board and paper are fibrous - sheen is what stops them reading as painted
+  // plastic.
+  const paper = new THREE.MeshPhysicalMaterial({
     color: 0xf4f7f8,
-    metalness: 0.02,
-    roughness: 0.72,
+    metalness: 0.0,
+    roughness: 0.82,
+    roughnessMap: maps?.wear ?? null,
+    sheen: 0.4,
+    sheenRoughness: 0.75,
+    sheenColor: new THREE.Color(0xffffff),
+    envMapIntensity: 0.6,
   });
-  const cyan = new THREE.MeshStandardMaterial({
+  const cyan = new THREE.MeshPhysicalMaterial({
     color: accent,
     emissive: accent,
     emissiveIntensity: 1.5,
     metalness: 0.32,
     roughness: 0.24,
+    clearcoat: 0.8,
+    clearcoatRoughness: 0.12,
+    envMapIntensity: 1.1,
   });
   const magenta = cyan.clone();
   magenta.color.setHex(secondary);
