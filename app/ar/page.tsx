@@ -6,12 +6,15 @@ import {
   ArrowLeft,
   Camera,
   CameraOff,
+  Circle,
   Download,
   RefreshCcw,
   Lock,
   ScanLine,
   Share2,
+  Square,
   Unlock,
+  Video,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -66,6 +69,13 @@ export default function ArPage() {
   const glRef = useRef<HTMLCanvasElement | null>(null);
   const markerVideoRef = useRef<HTMLVideoElement | null>(null);
   const [photo, setPhoto] = useState<string | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const recordingFrameRef = useRef(0);
+  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const videoUrlRef = useRef<string | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [recordedVideo, setRecordedVideo] = useState<{ url: string; type: string } | null>(null);
   // A ref, not state: the ZXing callback closes over the render that created
   // it, so a state value read inside it would be permanently stale.
   const lockedRef = useRef(false);
@@ -93,7 +103,13 @@ export default function ArPage() {
       setMessage(`${CHARACTERS[model].name} is ready. Start AR, then aim at the square marker.`);
     }
 
-    return () => controlsRef.current?.stop();
+    return () => {
+      controlsRef.current?.stop();
+      recorderRef.current?.stop();
+      cancelAnimationFrame(recordingFrameRef.current);
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+      if (videoUrlRef.current) URL.revokeObjectURL(videoUrlRef.current);
+    };
   }, []);
 
   const stopScanner = () => {
@@ -194,11 +210,145 @@ export default function ArPage() {
   };
 
   const stopCamera = () => {
+    if (recorderRef.current?.state === "recording") recorderRef.current.stop();
     lockedRef.current = false;
     setLocked(false);
     stopScanner();
     setCameraState("ready");
     setMessage(selected ? `${CHARACTERS[selected].name} is ready. Start AR to track the marker.` : "Camera stopped.");
+  };
+
+  const drawArFrame = (
+    ctx: CanvasRenderingContext2D,
+    canvas: HTMLCanvasElement,
+    video: HTMLVideoElement,
+    gl: HTMLCanvasElement,
+  ) => {
+    const width = canvas.width;
+    const height = canvas.height;
+    if (video.videoWidth > 0 && video.videoHeight > 0) {
+      const videoAspect = video.videoWidth / video.videoHeight;
+      const boxAspect = width / height;
+      const drawWidth = videoAspect > boxAspect ? height * videoAspect : width;
+      const drawHeight = videoAspect > boxAspect ? height : width / videoAspect;
+      ctx.drawImage(video, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight);
+    } else {
+      ctx.fillStyle = "#050a0f";
+      ctx.fillRect(0, 0, width, height);
+    }
+    ctx.drawImage(gl, 0, 0, width, height);
+  };
+
+  const startVideoRecording = () => {
+    const video = markerVideoRef.current;
+    const gl = glRef.current;
+    if (!video || !gl || !selected || typeof MediaRecorder === "undefined") {
+      setMessage("Video recording is not supported by this browser. Try Chrome or Safari on a recent phone.");
+      return;
+    }
+
+    const scale = Math.min(window.devicePixelRatio, 2);
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(Math.round(gl.clientWidth * scale), 1);
+    canvas.height = Math.max(Math.round(gl.clientHeight * scale), 1);
+    const ctx = canvas.getContext("2d", { alpha: false });
+    if (!ctx || typeof canvas.captureStream !== "function") {
+      setMessage("Video recording is not supported by this browser.");
+      return;
+    }
+
+    const candidates = [
+      "video/mp4;codecs=h264",
+      "video/mp4",
+      "video/webm;codecs=vp9",
+      "video/webm;codecs=vp8",
+      "video/webm",
+    ];
+    const mimeType = candidates.find((type) => MediaRecorder.isTypeSupported(type)) ?? "";
+    const stream = canvas.captureStream(30);
+    const chunks: BlobPart[] = [];
+    let recorder: MediaRecorder;
+
+    try {
+      recorder = new MediaRecorder(stream, {
+        ...(mimeType ? { mimeType } : {}),
+        videoBitsPerSecond: 8_000_000,
+      });
+    } catch {
+      stream.getTracks().forEach((track) => track.stop());
+      setMessage("This browser could not start video recording.");
+      return;
+    }
+
+    const renderFrame = () => {
+      drawArFrame(ctx, canvas, video, gl);
+      recordingFrameRef.current = requestAnimationFrame(renderFrame);
+    };
+
+    recorder.ondataavailable = (event) => {
+      if (event.data.size) chunks.push(event.data);
+    };
+    recorder.onerror = () => setMessage("The video recording stopped because of a browser error.");
+    recorder.onstop = () => {
+      cancelAnimationFrame(recordingFrameRef.current);
+      stream.getTracks().forEach((track) => track.stop());
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+      setIsRecording(false);
+      recorderRef.current = null;
+      if (!chunks.length) return;
+      const type = recorder.mimeType || mimeType || "video/webm";
+      const blob = new Blob(chunks, { type });
+      if (videoUrlRef.current) URL.revokeObjectURL(videoUrlRef.current);
+      const url = URL.createObjectURL(blob);
+      videoUrlRef.current = url;
+      setRecordedVideo({ url, type });
+      setMessage("AR video ready to preview, share or save.");
+    };
+
+    setRecordedVideo(null);
+    setRecordingSeconds(0);
+    recorderRef.current = recorder;
+    renderFrame();
+    recorder.start(1000);
+    setIsRecording(true);
+    setMessage("Recording AR video… Keep the marker visible.");
+    recordingTimerRef.current = setInterval(() => setRecordingSeconds((seconds) => seconds + 1), 1000);
+  };
+
+  const stopVideoRecording = () => {
+    if (recorderRef.current?.state === "recording") recorderRef.current.stop();
+  };
+
+  const videoExtension = recordedVideo?.type.includes("mp4") ? "mp4" : "webm";
+
+  const saveVideo = () => {
+    if (!recordedVideo || !selected) return;
+    const link = document.createElement("a");
+    link.href = recordedVideo.url;
+    link.download = `sc-${selected}-${Date.now()}.${videoExtension}`;
+    link.click();
+  };
+
+  const shareVideo = async () => {
+    if (!recordedVideo || !selected) return;
+    try {
+      const blob = await (await fetch(recordedVideo.url)).blob();
+      const file = new File([blob], `sc-${selected}.${videoExtension}`, { type: recordedVideo.type });
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title: `${CHARACTERS[selected].name} · SC Printing AR` });
+        return;
+      }
+    } catch {
+      // Share sheet dismissed or unsupported - fall back to a download.
+    }
+    saveVideo();
+  };
+
+  const closeVideo = () => {
+    if (videoUrlRef.current) URL.revokeObjectURL(videoUrlRef.current);
+    videoUrlRef.current = null;
+    setRecordedVideo(null);
   };
 
   const toggleLock = () => {
@@ -351,12 +501,12 @@ export default function ArPage() {
               </Button>
             ) : (
               <div className="flex flex-wrap justify-center gap-2">
-                {markerActive && (
+                {markerActive && !isRecording && (
                   <Button type="button" onClick={scanAnother} className="h-11 rounded-full bg-cyan-300 px-5 text-slate-950 hover:bg-cyan-200">
                     <RefreshCcw /> Scan another QR
                   </Button>
                 )}
-                {markerActive && (
+                {markerActive && !isRecording && (
                   <Button
                     type="button"
                     variant="outline"
@@ -368,9 +518,19 @@ export default function ArPage() {
                     {locked ? "Locked" : "Lock"}
                   </Button>
                 )}
-                {markerActive && (
+                {markerActive && !isRecording && (
                   <Button type="button" onClick={capturePhoto} className="h-11 rounded-full bg-white px-5 text-slate-950 hover:bg-slate-100">
                     <Camera /> Take photo
+                  </Button>
+                )}
+                {markerActive && !isRecording && (
+                  <Button type="button" onClick={startVideoRecording} className="h-11 rounded-full bg-red-500 px-5 text-white hover:bg-red-400">
+                    <Video /> Take video
+                  </Button>
+                )}
+                {markerActive && isRecording && (
+                  <Button type="button" onClick={stopVideoRecording} className="h-11 rounded-full bg-red-500 px-5 text-white hover:bg-red-400">
+                    <Square className="fill-current" /> Stop {Math.floor(recordingSeconds / 60)}:{String(recordingSeconds % 60).padStart(2, "0")}
                   </Button>
                 )}
                 <Button type="button" variant="outline" onClick={stopCamera} className="h-11 rounded-full border-white/20 bg-slate-950/65 px-5 text-white hover:bg-white/10 hover:text-white">
@@ -418,6 +578,33 @@ export default function ArPage() {
             </Button>
             <Button type="button" variant="outline" onClick={savePhoto} className="h-12 rounded-full border-white/20 bg-slate-950/65 px-6 text-white hover:bg-white/10 hover:text-white">
               <Download /> Save
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {recordedVideo && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-slate-950/95 backdrop-blur">
+          <div className="flex items-center justify-between p-4">
+            <span className="flex items-center gap-2 text-sm font-semibold text-white">
+              <Circle className="size-3 fill-red-500 text-red-500" /> AR video
+            </span>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={closeVideo}
+              className="h-11 rounded-full border-white/20 bg-slate-950/65 px-4 text-white hover:bg-white/10 hover:text-white"
+            >
+              <X /> Close
+            </Button>
+          </div>
+          <video src={recordedVideo.url} controls playsInline className="mx-auto max-h-[68dvh] max-w-full bg-black object-contain" />
+          <div className="flex flex-wrap justify-center gap-3 p-6">
+            <Button type="button" onClick={shareVideo} className="h-12 rounded-full bg-cyan-300 px-6 text-slate-950 hover:bg-cyan-200">
+              <Share2 /> Share
+            </Button>
+            <Button type="button" variant="outline" onClick={saveVideo} className="h-12 rounded-full border-white/20 bg-slate-950/65 px-6 text-white hover:bg-white/10 hover:text-white">
+              <Download /> Save video
             </Button>
           </div>
         </div>
