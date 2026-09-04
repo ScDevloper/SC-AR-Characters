@@ -45,7 +45,10 @@ export default function QrSheetPage() {
     return CHARACTER_IDS.map((id) => {
       const character = CHARACTERS[id];
       const root = origin || "https://example.com";
-      const url = destination === "ar" ? `${root}/ar?model=${id}` : `${root}/?model=${id}`;
+      // Short form: every character dropped from ?model=maintenance to ?m=12,
+      // which is what keeps the printed code small enough to scan easily.
+      const url =
+        destination === "ar" ? `${root}/ar?m=${character.num}` : `${root}/?m=${character.num}`;
       const dark = tinted ? darken(character.accent) : "#0b1120";
       const modules = encodeQr(url, ecc);
       return {

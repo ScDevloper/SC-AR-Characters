@@ -20,6 +20,7 @@ import {
   CHARACTERS,
   CHARACTER_IDS,
   hex,
+  characterFromNumber,
   isCharacterId,
   type CharacterId,
 } from "@/components/characters/registry";
@@ -35,11 +36,21 @@ const STANDALONE = BASE !== "/";
 function characterFromQr(value: string): CharacterId | null {
   const raw = value.trim();
   if (isCharacterId(raw)) return raw;
+  // A bare number is the shortest possible payload.
+  const bare = characterFromNumber(raw);
+  if (bare) return bare;
 
   try {
     const url = new URL(raw, window.location.origin);
+    // `?m=7` is the short form printed on the codes; `?model=press` is kept so
+    // any sheet already printed keeps working.
+    const short = characterFromNumber(url.searchParams.get("m"));
+    if (short) return short;
     const model = url.searchParams.get("model");
-    return isCharacterId(model) ? model : null;
+    if (isCharacterId(model)) return model;
+    // Path form, served through the 404 fallback: /ar/7
+    const tail = url.pathname.split("/").filter(Boolean).pop();
+    return characterFromNumber(tail);
   } catch {
     return null;
   }
@@ -63,8 +74,12 @@ export default function ArPage() {
   }, []);
 
   useEffect(() => {
-    const model = new URLSearchParams(window.location.search).get("model");
-    if (isCharacterId(model)) {
+    const params = new URLSearchParams(window.location.search);
+    const model =
+      characterFromNumber(params.get("m")) ??
+      (isCharacterId(params.get("model")) ? (params.get("model") as CharacterId) : null) ??
+      characterFromNumber(window.location.pathname.split("/").filter(Boolean).pop());
+    if (model) {
       setSelected(model);
       handledRef.current = true;
       setMessage(`${CHARACTERS[model].name} is ready for AR.`);

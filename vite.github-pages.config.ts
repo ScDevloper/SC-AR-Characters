@@ -8,7 +8,9 @@ const projectRoot = fileURLToPath(new URL(".", import.meta.url));
 
 export default defineConfig({
   root: fileURLToPath(new URL("./github-pages", import.meta.url)),
-  base: "/SC-AR-Characters/",
+  // Set by the Pages workflow from the repository name, so renaming the repo
+  // needs no code change. Falls back for local `npm run build:pages` runs.
+  base: process.env.PAGES_BASE ?? "/SC-AR-Characters/",
   publicDir: fileURLToPath(new URL("./public", import.meta.url)),
   resolve: {
     alias: {
