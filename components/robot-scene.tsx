@@ -31,6 +31,8 @@ import { CHARACTERS, CHARACTER_IDS, type CharacterId } from "@/components/charac
 import {
   ANCHOR_DISTANCE_K,
   ANCHOR_GRACE_MS,
+  AR_MAX_SCREEN_FRACTION,
+  AR_TARGET_HEIGHT,
   type MarkerAnchor,
 } from "@/components/characters/anchor";
 
@@ -200,7 +202,20 @@ export function RobotScene({
     else scene.add(floorRing);
 
     const rig = createCharacter(scene, variant);
-    if (arMode) stand.add(rig.root);
+    if (arMode) {
+      stand.add(rig.root);
+
+      // Characters are authored at whatever height suited the studio viewer,
+      // so normalise before the marker distance is applied - and seat the feet
+      // exactly on the anchor rather than assuming a fixed floor offset.
+      rig.rest();
+      rig.root.updateMatrixWorld(true);
+      const bounds = new THREE.Box3().setFromObject(rig.root);
+      const naturalHeight = Math.max(bounds.max.y - bounds.min.y, 0.001);
+      const fit = AR_TARGET_HEIGHT / naturalHeight;
+      stand.scale.setScalar(fit);
+      stand.position.y = -bounds.min.y * fit;
+    }
     if (realistic) enhanceMaterials(rig.root, CHARACTER_IDS.indexOf(variant) + 1);
     const cameraHome = rig.frame?.camera ?? DEFAULT_CAMERA;
     const targetHome = rig.frame?.target ?? DEFAULT_TARGET;
@@ -218,6 +233,7 @@ export function RobotScene({
       accent: variantInfo.accent,
     });
     const anchorTarget = new THREE.Vector3();
+    let anchorFit = 1;
     const clock = new THREE.Clock();
     animationRef.current.start = performance.now();
 
@@ -298,6 +314,15 @@ export function RobotScene({
           // everything is eased - without this the character teleports.
           anchorGroup.position.lerp(anchorTarget, 0.16);
           anchorGroup.rotation.z += (-anchor.roll - anchorGroup.rotation.z) * 0.12;
+
+          // How tall the frustum is at that distance, so we can cap the
+          // character's share of the screen no matter how close the code gets.
+          const visibleHeight =
+            2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2) * distance;
+          const ceiling = (visibleHeight * AR_MAX_SCREEN_FRACTION) / AR_TARGET_HEIGHT;
+          anchorFit += (Math.min(1, ceiling) - anchorFit) * 0.16;
+          anchorGroup.scale.setScalar(anchorFit);
+
           anchorGroup.visible = true;
         } else if (anchor) {
           anchorGroup.visible = false;

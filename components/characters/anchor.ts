@@ -82,3 +82,17 @@ export const ANCHOR_GRACE_MS = 1500;
  * without knowing the physical dimensions of the marker.
  */
 export const ANCHOR_DISTANCE_K = 2.2;
+
+/**
+ * Every character is scaled so it stands this tall in world units before the
+ * anchor distance is applied. Without it a 5.6-unit gripper and a 3.0-unit
+ * rover appear at completely different sizes on the same marker.
+ */
+export const AR_TARGET_HEIGHT = 2.6;
+
+/**
+ * Hard ceiling on how much of the viewport height a character may fill, no
+ * matter how close the phone gets to the code. Stops the model swallowing the
+ * screen when someone leans over the table.
+ */
+export const AR_MAX_SCREEN_FRACTION = 0.62;
