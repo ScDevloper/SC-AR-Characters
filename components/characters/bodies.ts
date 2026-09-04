@@ -7,7 +7,7 @@ import { addBrandBadge, addFace, addMesh, type CharacterRig, type Palette } from
  * ------------------------------------------------------------------ */
 
 export function buildRover(scene: THREE.Scene, palette: Palette): CharacterRig {
-  const { metal, darkMetal, rubber, screen, paper, cyan, magenta } = palette;
+  const { metal, darkMetal, rubber, screen, paper, cyan, magenta, yellow, glow } = palette;
 
   const root = new THREE.Group();
   root.position.y = 0.08;
@@ -19,12 +19,31 @@ export function buildRover(scene: THREE.Scene, palette: Palette): CharacterRig {
   addMesh(chassis, new RoundedBoxGeometry(2.5, 0.72, 1.7, 5, 0.16), darkMetal, [0, 0, 0]);
   addMesh(chassis, new RoundedBoxGeometry(2.1, 0.12, 1.3, 3, 0.05), cyan, [0, -0.42, 0]);
 
+  // Industrial bumper and corner lights make the little courier read as a
+  // real autonomous factory vehicle instead of a box on wheels.
+  addMesh(chassis, new RoundedBoxGeometry(2.16, 0.18, 0.16, 3, 0.05), metal, [0, -0.08, 0.88]);
+  addMesh(chassis, new RoundedBoxGeometry(1.2, 0.09, 0.08, 2, 0.02), yellow, [0, -0.08, 0.98]);
+  for (const x of [-0.85, 0.85]) {
+    addMesh(chassis, new THREE.SphereGeometry(0.09, 18, 12), glow, [x, 0.13, 0.89]);
+  }
+
   const wheels: THREE.Mesh[] = [];
   for (const side of [-1, 1]) {
     const track = new THREE.Group();
     track.position.set(side * 1.06, -0.1, 0);
     chassis.add(track);
     addMesh(track, new RoundedBoxGeometry(0.36, 0.86, 2.24, 4, 0.3), rubber, [0, 0, 0]);
+    // Raised tread blocks catch highlights and stay legible in phone AR.
+    for (const y of [-0.43, 0.43]) {
+      for (const z of [-0.72, -0.24, 0.24, 0.72]) {
+        addMesh(track, new RoundedBoxGeometry(0.43, 0.1, 0.28, 2, 0.025), darkMetal, [0, y, z]);
+      }
+    }
+    for (const z of [-1.08, 1.08]) {
+      for (const y of [-0.22, 0.22]) {
+        addMesh(track, new RoundedBoxGeometry(0.43, 0.22, 0.1, 2, 0.025), darkMetal, [0, y, z]);
+      }
+    }
     for (const z of [-0.72, 0, 0.72]) {
       wheels.push(
         addMesh(
@@ -47,6 +66,16 @@ export function buildRover(scene: THREE.Scene, palette: Palette): CharacterRig {
   const cargo = new THREE.Group();
   cargo.position.set(-0.35, 0.52, 0);
   chassis.add(cargo);
+  addMesh(cargo, new RoundedBoxGeometry(1.18, 0.1, 1.18, 3, 0.035), metal, [0, -0.18, 0]);
+  // Cyan safety rails hold the printed cartons during the dance.
+  for (const x of [-0.56, 0.56]) {
+    for (const z of [-0.56, 0.56]) {
+      addMesh(cargo, new THREE.CylinderGeometry(0.025, 0.025, 1.18, 10), cyan, [x, 0.36, z]);
+    }
+  }
+  for (const x of [-0.56, 0.56]) {
+    addMesh(cargo, new THREE.CylinderGeometry(0.025, 0.025, 1.12, 10), cyan, [x, 0.91, 0], [Math.PI / 2, 0, 0]);
+  }
   const cartons: THREE.Mesh[] = [];
   for (let i = 0; i < 3; i++) {
     cartons.push(
@@ -76,6 +105,30 @@ export function buildRover(scene: THREE.Scene, palette: Palette): CharacterRig {
   const eyes = addFace(head, palette, 0.8);
   eyes.position.z = 0.54;
 
+  // Two friendly loading arms turn CART-13 into a character, not just a cart.
+  const arms: THREE.Group[] = [];
+  const hands: THREE.Group[] = [];
+  for (const side of [-1, 1]) {
+    const arm = new THREE.Group();
+    arm.position.set(side * 0.72, 0.16, 0.18);
+    neck.add(arm);
+    addMesh(arm, new THREE.SphereGeometry(0.16, 18, 14), darkMetal, [0, 0, 0]);
+    addMesh(arm, new RoundedBoxGeometry(0.22, 0.78, 0.24, 4, 0.08), metal, [side * 0.12, -0.42, 0.1], [0, 0, side * 0.24]);
+    const hand = new THREE.Group();
+    hand.position.set(side * 0.22, -0.84, 0.2);
+    arm.add(hand);
+    addMesh(hand, new RoundedBoxGeometry(0.34, 0.24, 0.3, 4, 0.08), side < 0 ? cyan : magenta, [0, 0, 0]);
+    for (const finger of [-0.1, 0, 0.1]) {
+      addMesh(hand, new RoundedBoxGeometry(0.055, 0.22, 0.06, 2, 0.025), darkMetal, [finger, -0.18, 0.03]);
+    }
+    arms.push(arm);
+    hands.push(hand);
+  }
+
+  // Rear proximity scanner and antenna communicate autonomous floor tracking.
+  addMesh(chassis, new THREE.CylinderGeometry(0.18, 0.18, 0.08, 24), cyan, [0, 0.12, -0.88], [Math.PI / 2, 0, 0]);
+  addMesh(chassis, new THREE.SphereGeometry(0.08, 16, 12), glow, [0, 0.12, -0.94]);
+
   const rest = () => {
     root.position.set(0, 0.08, 0);
     root.rotation.set(0, 0, 0);
@@ -83,6 +136,8 @@ export function buildRover(scene: THREE.Scene, palette: Palette): CharacterRig {
     neck.rotation.set(0, 0, 0);
     head.rotation.set(0, 0, 0);
     cargo.rotation.set(0, 0, 0);
+    arms.forEach((arm) => arm.rotation.set(0, 0, 0));
+    hands.forEach((hand) => hand.rotation.set(0, 0, 0));
     cartons.forEach((box, i) => box.position.set(0, i * 0.38, 0));
     eyes.scale.set(1, 1, 1);
   };
@@ -97,6 +152,12 @@ export function buildRover(scene: THREE.Scene, palette: Palette): CharacterRig {
     neck.rotation.y = Math.sin(beat * 0.7) * 0.5;
     head.rotation.z = Math.sin(beat * 2 + 0.6) * 0.14;
     head.rotation.x = -0.08 + swing * 0.1;
+    arms[0].rotation.z = 0.18 + Math.sin(beat * 1.4) * 0.52;
+    arms[1].rotation.z = -0.18 - Math.sin(beat * 1.4) * 0.52;
+    arms[0].rotation.x = Math.sin(beat * 2) * 0.22;
+    arms[1].rotation.x = -Math.sin(beat * 2) * 0.22;
+    hands[0].rotation.y = Math.sin(beat * 2.4) * 0.45;
+    hands[1].rotation.y = -Math.sin(beat * 2.4) * 0.45;
     cargo.rotation.y = beat * 0.35;
     cartons.forEach((box, i) => {
       box.position.y = i * 0.38 + Math.sin(beat * 2 - i * 0.8) * 0.05;
