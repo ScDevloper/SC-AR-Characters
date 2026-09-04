@@ -166,9 +166,7 @@ export function RobotScene({
 
     // Deterministic per-character spin so no two neighbouring codes turn alike.
     const spinIndex = CHARACTER_IDS.indexOf(variant);
-    const spinSpeed = variant === "dancer"
-      ? 0
-      : (0.2 + (spinIndex % 4) * 0.055) * (spinIndex % 2 === 0 ? 1 : -1);
+    const spinSpeed = (0.2 + (spinIndex % 4) * 0.055) * (spinIndex % 2 === 0 ? 1 : -1);
 
     if (arMode) {
 

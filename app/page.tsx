@@ -5,7 +5,7 @@ import { RobotScene } from "@/components/robot-scene";
 import { isCharacterId, type CharacterId } from "@/components/characters/registry";
 
 export default function Home() {
-  const [selected, setSelected] = useState<CharacterId>("press");
+  const [selected, setSelected] = useState<CharacterId>("laminate");
 
   useEffect(() => {
     const model = new URLSearchParams(window.location.search).get("model");
