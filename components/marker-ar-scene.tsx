@@ -9,7 +9,11 @@ import {
   ArToolkitSource,
 } from "@ar-js-org/ar.js/three.js/build/ar-threex.mjs";
 import { createCharacter } from "@/components/characters/create-character";
-import { enhanceMaterials } from "@/components/characters/realism";
+import {
+  attachEnvironment,
+  enhanceMaterials,
+  upgradeShadows,
+} from "@/components/characters/realism";
 import { CHARACTERS, CHARACTER_IDS, type CharacterId } from "@/components/characters/registry";
 
 type MarkerArSceneProps = {
@@ -54,6 +58,8 @@ export function MarkerArScene({
     const renderer = new THREE.WebGLRenderer({
       alpha: true,
       antialias: true,
+      precision: "highp",
+      preserveDrawingBuffer: true,
       powerPreference: "high-performance",
     });
     renderer.setClearColor(0x000000, 0);
@@ -61,6 +67,8 @@ export function MarkerArScene({
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.18;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.domElement.className = "absolute inset-0 z-[1] h-full w-full";
     mount.appendChild(renderer.domElement);
     onCanvasReady?.(renderer.domElement);
@@ -68,10 +76,17 @@ export function MarkerArScene({
     scene.add(new THREE.HemisphereLight(0xdaf6ff, 0x17202b, 3.1));
     const key = new THREE.DirectionalLight(0xffffff, 5.5);
     key.position.set(3, 7, 5);
+    key.castShadow = true;
+    upgradeShadows(key);
     scene.add(key);
     const rim = new THREE.PointLight(CHARACTERS[variant].accent, 18, 10, 2);
     rim.position.set(-3, 4, 2);
     scene.add(rim);
+
+    // The studio viewer already uses this reflection environment. The first
+    // marker implementation omitted it, causing metallic and physical
+    // materials to become dark, flat and visibly lower quality in AR.
+    const releaseEnvironment = attachEnvironment(renderer, scene, 1);
 
     const markerRoot = new THREE.Group();
     markerRoot.matrixAutoUpdate = false;
@@ -139,6 +154,12 @@ export function MarkerArScene({
       if (!source.domElement) return;
       source.onResizeElement();
       source.copyElementSizeTo(renderer.domElement);
+      // AR.js copies CSS/video dimensions directly onto the canvas. Reapply
+      // Three's DPR-aware backing resolution so the model stays sharp on
+      // Retina and high-density phone screens without moving the overlay.
+      const renderWidth = Math.max(renderer.domElement.clientWidth, 1);
+      const renderHeight = Math.max(renderer.domElement.clientHeight, 1);
+      renderer.setSize(renderWidth, renderHeight, false);
       if (context.arController) source.copyElementSizeTo(context.arController.canvas);
     };
 
@@ -202,6 +223,7 @@ export function MarkerArScene({
       cancelAnimationFrame(frame);
       window.removeEventListener("resize", resize);
       source.dispose?.();
+      releaseEnvironment();
       onCanvasReady?.(null);
       onVideoReady?.(null);
       scene.traverse((object) => {
