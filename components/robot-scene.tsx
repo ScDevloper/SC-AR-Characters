@@ -345,7 +345,7 @@ export function RobotScene({
       controls.update();
       if (arMode && anchorRef) {
         const anchor = anchorRef.current;
-        if (anchor && performance.now() - anchor.at < ANCHOR_GRACE_MS) {
+        if (anchor) {
           // Apparent marker size stands in for distance: a code filling more
           // of the frame is closer, so the character is placed nearer.
           const distance = THREE.MathUtils.clamp(
@@ -353,6 +353,11 @@ export function RobotScene({
             5,
             30,
           );
+
+          // Re-projected EVERY frame, including from a stale reading. The
+          // anchor is stored as a 0-1 screen fraction, so rotating the phone
+          // re-derives the same relative position under the new aspect ratio
+          // instead of stranding the character outside the frustum.
           anchorTarget
             .set(anchor.x * 2 - 1, -(anchor.y * 2 - 1), 0.5)
             .unproject(camera)
@@ -362,9 +367,12 @@ export function RobotScene({
             .add(camera.position);
 
           // ZXing decodes a handful of times a second, not once per frame, so
-          // everything is eased - without this the character teleports.
-          anchorGroup.position.lerp(anchorTarget, 0.16);
-          anchorGroup.rotation.z += (-anchor.roll - anchorGroup.rotation.z) * 0.12;
+          // everything is eased. A stale reading eases more slowly: it settles
+          // rather than chasing data that is no longer being refreshed.
+          const fresh = performance.now() - anchor.at < ANCHOR_GRACE_MS;
+          const ease = fresh ? 0.16 : 0.05;
+          anchorGroup.position.lerp(anchorTarget, ease);
+          anchorGroup.rotation.z += (-anchor.roll - anchorGroup.rotation.z) * ease * 0.75;
 
           // How tall the frustum is at that distance, so we can cap the
           // character's share of the screen no matter how close the code gets.
@@ -375,8 +383,6 @@ export function RobotScene({
           anchorGroup.scale.setScalar(anchorFit);
 
           anchorGroup.visible = true;
-        } else if (anchor) {
-          anchorGroup.visible = false;
         }
       }
 

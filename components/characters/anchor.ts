@@ -55,12 +55,24 @@ export function anchorFromPoints(
   );
 
   // Widest separation between finder patterns approximates the code's size.
-  let span = 0;
-  for (let i = 0; i < mapped.length; i++) {
-    for (let j = i + 1; j < mapped.length; j++) {
-      span = Math.max(span, Math.hypot(mapped[i].x - mapped[j].x, mapped[i].y - mapped[j].y));
+  //
+  // Measured in CSS PIXELS, then divided by the box height - not computed from
+  // the per-axis normalised coordinates above. Those divide x by width and y by
+  // height, so the resulting length changes with the aspect ratio: rotating a
+  // phone from 390x780 to 780x390 halved the value, doubled the derived
+  // distance, and threw the character to the far clamp. Height is the right
+  // reference because the three.js camera's fov is vertical.
+  const pixels = points.map((point) => ({
+    x: point.getX() * cover + offsetX,
+    y: point.getY() * cover + offsetY,
+  }));
+  let spanPx = 0;
+  for (let i = 0; i < pixels.length; i++) {
+    for (let j = i + 1; j < pixels.length; j++) {
+      spanPx = Math.max(spanPx, Math.hypot(pixels[i].x - pixels[j].x, pixels[i].y - pixels[j].y));
     }
   }
+  const span = spanPx / boxHeight;
 
   // ZXing orders QR points bottom-left, top-left, top-right, so the first and
   // last give the code's baseline direction.
@@ -72,7 +84,11 @@ export function anchorFromPoints(
   return { x: centre.x, y: centre.y, scale: Math.max(span, 0.001), roll, at: performance.now() };
 }
 
-/** How long a stale reading keeps driving the character before it is dropped. */
+/**
+ * How long a reading keeps STEERING the character. Past this the last pose is
+ * held rather than hidden - rotating the phone briefly loses the code, and
+ * having the character vanish for that moment reads as a crash.
+ */
 export const ANCHOR_GRACE_MS = 1500;
 
 /**
@@ -80,8 +96,11 @@ export const ANCHOR_GRACE_MS = 1500;
  * away (smaller); lower it to bring them closer. Needs tuning against a real
  * printed code at the size you actually print - there is no way to derive it
  * without knowing the physical dimensions of the marker.
+ *
+ * Halved when `scale` moved from a width fraction to a height fraction, so
+ * portrait framing matches what it was before.
  */
-export const ANCHOR_DISTANCE_K = 2.2;
+export const ANCHOR_DISTANCE_K = 1.1;
 
 /**
  * Every character is scaled so its LARGEST dimension is this many world units
