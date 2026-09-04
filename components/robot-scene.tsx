@@ -16,6 +16,12 @@ import {
   buildStack,
 } from "@/components/characters/bodies";
 import {
+  buildGantry,
+  buildKiosk,
+  buildOrb,
+  buildPress,
+} from "@/components/characters/bodies-machines";
+import {
   buildCrawler,
   buildDrop,
   buildSwarm,
@@ -32,7 +38,7 @@ import {
   ANCHOR_DISTANCE_K,
   ANCHOR_GRACE_MS,
   AR_MAX_SCREEN_FRACTION,
-  AR_TARGET_HEIGHT,
+  AR_TARGET_SIZE,
   type MarkerAnchor,
 } from "@/components/characters/anchor";
 
@@ -73,6 +79,14 @@ function createCharacter(scene: THREE.Scene, id: CharacterId): CharacterRig {
       return buildDrop(scene, palette);
     case "swarm":
       return buildSwarm(scene, palette);
+    case "press":
+      return buildPress(scene, palette);
+    case "kiosk":
+      return buildKiosk(scene, palette);
+    case "orb":
+      return buildOrb(scene, palette);
+    case "gantry":
+      return buildGantry(scene, palette);
     case "humanoid":
     default:
       return buildHumanoid(scene, palette, id);
@@ -201,9 +215,20 @@ export function RobotScene({
     if (arMode) stand.add(floorRing);
     else scene.add(floorRing);
 
+    let arHeight = 1;
     const rig = createCharacter(scene, variant);
+
+    // Auto-rotation lives on a wrapper: several characters animate their own
+    // root.rotation.y, and writing to it here would cancel their choreography.
+    const turntable = new THREE.Group();
+    (arMode ? stand : scene).add(turntable);
+    turntable.add(rig.root);
+
+    // Deterministic per-character spin so no two neighbouring codes turn alike.
+    const spinIndex = CHARACTER_IDS.indexOf(variant);
+    const spinSpeed = (0.2 + (spinIndex % 4) * 0.055) * (spinIndex % 2 === 0 ? 1 : -1);
+
     if (arMode) {
-      stand.add(rig.root);
 
       // Characters are authored at whatever height suited the studio viewer,
       // so normalise before the marker distance is applied - and seat the feet
@@ -211,10 +236,14 @@ export function RobotScene({
       rig.rest();
       rig.root.updateMatrixWorld(true);
       const bounds = new THREE.Box3().setFromObject(rig.root);
-      const naturalHeight = Math.max(bounds.max.y - bounds.min.y, 0.001);
-      const fit = AR_TARGET_HEIGHT / naturalHeight;
+      const extent = bounds.getSize(new THREE.Vector3());
+      const largest = Math.max(extent.x, extent.y, extent.z, 0.001);
+      const fit = AR_TARGET_SIZE / largest;
       stand.scale.setScalar(fit);
       stand.position.y = -bounds.min.y * fit;
+      // The screen clamp needs the character's real scaled height, which is
+      // not AR_TARGET_SIZE unless the body happens to be tallest on Y.
+      arHeight = Math.max(extent.y * fit, 0.001);
     }
     if (realistic) enhanceMaterials(rig.root, CHARACTER_IDS.indexOf(variant) + 1);
     const cameraHome = rig.frame?.camera ?? DEFAULT_CAMERA;
@@ -239,6 +268,7 @@ export function RobotScene({
 
     const resetPose = () => {
       rig.rest();
+      turntable.rotation.y = 0;
       camera.position.set(...cameraHome);
       controls.target.set(...targetHome);
       controls.update();
@@ -285,6 +315,7 @@ export function RobotScene({
       rig.spinners.forEach(({ part, axis, speed }) => {
         part.rotation[axis] += delta * speed;
       });
+      if (animationRef.current.dancing) turntable.rotation.y += delta * spinSpeed;
       floorRing.rotation.z -= delta * 0.15;
       ringMaterial.opacity = 0.2 + Math.sin(t * 2.4) * 0.08;
       controls.update();
@@ -319,7 +350,7 @@ export function RobotScene({
           // character's share of the screen no matter how close the code gets.
           const visibleHeight =
             2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2) * distance;
-          const ceiling = (visibleHeight * AR_MAX_SCREEN_FRACTION) / AR_TARGET_HEIGHT;
+          const ceiling = (visibleHeight * AR_MAX_SCREEN_FRACTION) / arHeight;
           anchorFit += (Math.min(1, ceiling) - anchorFit) * 0.16;
           anchorGroup.scale.setScalar(anchorFit);
 

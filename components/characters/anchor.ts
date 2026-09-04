@@ -84,11 +84,14 @@ export const ANCHOR_GRACE_MS = 1500;
 export const ANCHOR_DISTANCE_K = 2.2;
 
 /**
- * Every character is scaled so it stands this tall in world units before the
- * anchor distance is applied. Without it a 5.6-unit gripper and a 3.0-unit
- * rover appear at completely different sizes on the same marker.
+ * Every character is scaled so its LARGEST dimension is this many world units
+ * before the anchor distance is applied. Without it a 5.7-unit gripper and a
+ * 2.9-unit rover appear at completely different sizes on the same marker.
+ *
+ * Largest dimension rather than height: the crawler is 1.1 tall but 6 long, so
+ * normalising on height alone would scale it up until it spanned the table.
  */
-export const AR_TARGET_HEIGHT = 2.6;
+export const AR_TARGET_SIZE = 2.6;
 
 /**
  * Hard ceiling on how much of the viewport height a character may fill, no

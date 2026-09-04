@@ -221,7 +221,7 @@ export function buildCrawler(scene: THREE.Scene, palette: Palette): CharacterRig
   return {
     root,
     spinners: segments.flatMap(({ wheels }) =>
-      wheels.map((part) => ({ part, axis: "z" as const, speed: 3.2 })),
+      wheels.map((part) => ({ part, axis: "x" as const, speed: 3.2 })),
     ),
     update,
     rest,

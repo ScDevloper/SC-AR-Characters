@@ -14,7 +14,11 @@ export type BodyKind =
   | "tube"
   | "crawler"
   | "drop"
-  | "swarm";
+  | "swarm"
+  | "press"
+  | "kiosk"
+  | "orb"
+  | "gantry";
 
 export type CharacterConfig = {
   name: string;
@@ -37,7 +41,7 @@ export const CHARACTERS = {
     accent: 0x19d9ff,
     secondary: 0xff2e8c,
     dance: "Roller groove",
-    body: "humanoid",
+    body: "press",
   },
   diecut: {
     name: "CutBot",
@@ -57,7 +61,7 @@ export const CHARACTERS = {
     accent: 0x2ee6a6,
     secondary: 0x55a7ff,
     dance: "Film-flow disco",
-    body: "humanoid",
+    body: "gantry",
   },
   quality: {
     name: "Q-Bot",
@@ -67,7 +71,7 @@ export const CHARACTERS = {
     accent: 0xa879ff,
     secondary: 0x19d9ff,
     dance: "Scanner swing",
-    body: "humanoid",
+    body: "orb",
   },
   carton: {
     name: "PackBot",
@@ -117,7 +121,7 @@ export const CHARACTERS = {
     accent: 0x38bdf8,
     secondary: 0x8b5cf6,
     dance: "Pixel pop",
-    body: "humanoid",
+    body: "kiosk",
   },
   foil: {
     name: "Foilio",
@@ -127,7 +131,7 @@ export const CHARACTERS = {
     accent: 0xffc83d,
     secondary: 0xff6b35,
     dance: "Golden glide",
-    body: "humanoid",
+    body: "press",
   },
   glue: {
     name: "Glu-Bug",
@@ -283,7 +287,7 @@ export const CHARACTERS = {
     accent: 0xf472b6,
     secondary: 0xfde68a,
     dance: "Welcome wave",
-    body: "humanoid",
+    body: "kiosk",
   },
   sales: {
     name: "Pitch",

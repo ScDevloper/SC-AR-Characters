@@ -201,6 +201,7 @@ export function buildDrone(scene: THREE.Scene, palette: Palette): CharacterRig {
     hull.position.set(0, 2.7, 0);
     hull.rotation.set(0, 0, 0);
     scanner.rotation.set(0, 0, 0);
+    beam.scale.setScalar(1);
     eyes.scale.set(1, 1, 1);
   };
 
