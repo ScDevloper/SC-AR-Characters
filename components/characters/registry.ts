@@ -18,7 +18,18 @@ export type BodyKind =
   | "press"
   | "kiosk"
   | "orb"
-  | "gantry";
+  | "gantry"
+  | "truck"
+  | "pallet"
+  | "forklift"
+  | "cutter"
+  | "mixer"
+  | "glueline"
+  | "stamper"
+  | "platesetter"
+  | "rack"
+  | "vault"
+  | "trolley";
 
 export type CharacterConfig = {
   name: string;
@@ -51,7 +62,7 @@ export const CHARACTERS = {
     accent: 0xff8a1f,
     secondary: 0xffd84a,
     dance: "Cutter twist",
-    body: "humanoid",
+    body: "cutter",
   },
   laminate: {
     name: "LamiBot",
@@ -81,7 +92,7 @@ export const CHARACTERS = {
     accent: 0xffd84a,
     secondary: 0xff6a3d,
     dance: "Boxy bounce",
-    body: "humanoid",
+    body: "pallet",
   },
   dispatch: {
     name: "DashBot",
@@ -91,7 +102,7 @@ export const CHARACTERS = {
     accent: 0x4c8dff,
     secondary: 0x2ee6a6,
     dance: "Delivery shuffle",
-    body: "humanoid",
+    body: "truck",
   },
   ink: {
     name: "Inky",
@@ -101,7 +112,7 @@ export const CHARACTERS = {
     accent: 0x00cfff,
     secondary: 0xff2e8c,
     dance: "Colour splash",
-    body: "humanoid",
+    body: "mixer",
   },
   paper: {
     name: "Rollie",
@@ -111,7 +122,7 @@ export const CHARACTERS = {
     accent: 0xe8f4ff,
     secondary: 0x4c8dff,
     dance: "Roll and rock",
-    body: "humanoid",
+    body: "forklift",
   },
   prepress: {
     name: "Pixel",
@@ -121,7 +132,7 @@ export const CHARACTERS = {
     accent: 0x38bdf8,
     secondary: 0x8b5cf6,
     dance: "Pixel pop",
-    body: "kiosk",
+    body: "platesetter",
   },
   foil: {
     name: "Foilio",
@@ -131,7 +142,7 @@ export const CHARACTERS = {
     accent: 0xffc83d,
     secondary: 0xff6b35,
     dance: "Golden glide",
-    body: "press",
+    body: "stamper",
   },
   glue: {
     name: "Glu-Bug",
@@ -141,7 +152,7 @@ export const CHARACTERS = {
     accent: 0x67e8a5,
     secondary: 0xf472b6,
     dance: "Sticky step",
-    body: "humanoid",
+    body: "glueline",
   },
   maintenance: {
     name: "Gearo",
@@ -267,7 +278,7 @@ export const CHARACTERS = {
     accent: 0x818cf8,
     secondary: 0x22d3ee,
     dance: "Uptime sweep",
-    body: "arm",
+    body: "rack",
   },
   finance: {
     name: "Ledger",
@@ -277,7 +288,7 @@ export const CHARACTERS = {
     accent: 0x34d399,
     secondary: 0xfacc15,
     dance: "Balance bounce",
-    body: "stack",
+    body: "vault",
   },
   hr: {
     name: "Buddy",
@@ -297,7 +308,7 @@ export const CHARACTERS = {
     accent: 0xfb7185,
     secondary: 0x38bdf8,
     dance: "Closing shuffle",
-    body: "rover",
+    body: "trolley",
   },
 } as const satisfies Record<string, CharacterConfig>;
 

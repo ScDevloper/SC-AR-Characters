@@ -16,6 +16,19 @@ import {
   buildStack,
 } from "@/components/characters/bodies";
 import {
+  buildCutter,
+  buildForklift,
+  buildGlueLine,
+  buildMixer,
+  buildPalletTrolley,
+  buildPlatesetter,
+  buildRack,
+  buildSampleTrolley,
+  buildStamper,
+  buildTruck,
+  buildVault,
+} from "@/components/characters/bodies-vehicles";
+import {
   buildGantry,
   buildKiosk,
   buildOrb,
@@ -87,6 +100,28 @@ function createCharacter(scene: THREE.Scene, id: CharacterId): CharacterRig {
       return buildOrb(scene, palette);
     case "gantry":
       return buildGantry(scene, palette);
+    case "truck":
+      return buildTruck(scene, palette);
+    case "pallet":
+      return buildPalletTrolley(scene, palette);
+    case "forklift":
+      return buildForklift(scene, palette);
+    case "cutter":
+      return buildCutter(scene, palette);
+    case "mixer":
+      return buildMixer(scene, palette);
+    case "glueline":
+      return buildGlueLine(scene, palette);
+    case "stamper":
+      return buildStamper(scene, palette);
+    case "platesetter":
+      return buildPlatesetter(scene, palette);
+    case "rack":
+      return buildRack(scene, palette);
+    case "vault":
+      return buildVault(scene, palette);
+    case "trolley":
+      return buildSampleTrolley(scene, palette);
     case "humanoid":
     default:
       return buildHumanoid(scene, palette, id);
