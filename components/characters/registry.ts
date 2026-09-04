@@ -29,7 +29,8 @@ export type BodyKind =
   | "platesetter"
   | "rack"
   | "vault"
-  | "trolley";
+  | "trolley"
+  | "dancer";
 
 export type CharacterConfig = {
   name: string;
@@ -337,6 +338,19 @@ export const CHARACTERS = {
     secondary: 0x38bdf8,
     dance: "Closing shuffle",
     body: "trolley",
+  },
+
+  /* --- party host ---------------------------------------------------- */
+  dancer: {
+    name: "Twirl",
+    shortName: "Dancer",
+    role: "Get-together dance host",
+    code: "DANCE-27",
+    num: 27,
+    accent: 0xf472b6,
+    secondary: 0xfacc15,
+    dance: "Spin and flare",
+    body: "dancer",
   },
 } as const satisfies Record<string, CharacterConfig>;
 

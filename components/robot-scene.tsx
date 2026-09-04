@@ -15,6 +15,7 @@ import {
   buildRover,
   buildStack,
 } from "@/components/characters/bodies";
+import { buildDancer } from "@/components/characters/bodies-people";
 import {
   buildCutter,
   buildForklift,
@@ -122,6 +123,8 @@ function createCharacter(scene: THREE.Scene, id: CharacterId): CharacterRig {
       return buildVault(scene, palette);
     case "trolley":
       return buildSampleTrolley(scene, palette);
+    case "dancer":
+      return buildDancer(scene, palette);
     case "humanoid":
     default:
       return buildHumanoid(scene, palette, id);
