@@ -27,12 +27,28 @@ export function buildRover(scene: THREE.Scene, palette: Palette): CharacterRig {
     addMesh(chassis, new THREE.SphereGeometry(0.09, 18, 12), glow, [x, 0.13, 0.89]);
   }
 
+  const tailLightMaterial = new THREE.MeshStandardMaterial({
+    color: 0xff1f2d,
+    emissive: 0xff0712,
+    emissiveIntensity: 2.4,
+    metalness: 0.05,
+    roughness: 0.22,
+  });
+  const tailLights: THREE.Mesh[] = [];
+  // Reinforced rear bumper, brake lights and amber side reflectors.
+  addMesh(chassis, new RoundedBoxGeometry(2.16, 0.2, 0.16, 3, 0.05), metal, [0, -0.08, -0.88]);
+  for (const x of [-0.84, 0.84]) {
+    tailLights.push(addMesh(chassis, new RoundedBoxGeometry(0.3, 0.17, 0.08, 3, 0.04), tailLightMaterial, [x, 0.14, -0.94]));
+    addMesh(chassis, new RoundedBoxGeometry(0.2, 0.07, 0.07, 2, 0.025), yellow, [x, -0.13, -0.96]);
+  }
+
   const wheels: THREE.Mesh[] = [];
   for (const side of [-1, 1]) {
     const track = new THREE.Group();
     track.position.set(side * 1.06, -0.1, 0);
     chassis.add(track);
     addMesh(track, new RoundedBoxGeometry(0.36, 0.86, 2.24, 4, 0.3), rubber, [0, 0, 0]);
+    addMesh(track, new RoundedBoxGeometry(0.5, 0.16, 1.72, 3, 0.07), metal, [0, 0.52, 0]);
     // Raised tread blocks catch highlights and stay legible in phone AR.
     for (const y of [-0.43, 0.43]) {
       for (const z of [-0.72, -0.24, 0.24, 0.72]) {
@@ -76,6 +92,10 @@ export function buildRover(scene: THREE.Scene, palette: Palette): CharacterRig {
   for (const x of [-0.56, 0.56]) {
     addMesh(cargo, new THREE.CylinderGeometry(0.025, 0.025, 1.12, 10), cyan, [x, 0.91, 0], [Math.PI / 2, 0, 0]);
   }
+  // Two tension straps secure the finished-goods cartons to the bed.
+  for (const x of [-0.3, 0.3]) {
+    addMesh(cargo, new RoundedBoxGeometry(0.055, 1.18, 0.94, 2, 0.018), magenta, [x, 0.42, 0]);
+  }
   const cartons: THREE.Mesh[] = [];
   for (let i = 0; i < 3; i++) {
     cartons.push(
@@ -105,26 +125,6 @@ export function buildRover(scene: THREE.Scene, palette: Palette): CharacterRig {
   const eyes = addFace(head, palette, 0.8);
   eyes.position.z = 0.54;
 
-  // Two friendly loading arms turn CART-13 into a character, not just a cart.
-  const arms: THREE.Group[] = [];
-  const hands: THREE.Group[] = [];
-  for (const side of [-1, 1]) {
-    const arm = new THREE.Group();
-    arm.position.set(side * 0.72, 0.16, 0.18);
-    neck.add(arm);
-    addMesh(arm, new THREE.SphereGeometry(0.16, 18, 14), darkMetal, [0, 0, 0]);
-    addMesh(arm, new RoundedBoxGeometry(0.22, 0.78, 0.24, 4, 0.08), metal, [side * 0.12, -0.42, 0.1], [0, 0, side * 0.24]);
-    const hand = new THREE.Group();
-    hand.position.set(side * 0.22, -0.84, 0.2);
-    arm.add(hand);
-    addMesh(hand, new RoundedBoxGeometry(0.34, 0.24, 0.3, 4, 0.08), side < 0 ? cyan : magenta, [0, 0, 0]);
-    for (const finger of [-0.1, 0, 0.1]) {
-      addMesh(hand, new RoundedBoxGeometry(0.055, 0.22, 0.06, 2, 0.025), darkMetal, [finger, -0.18, 0.03]);
-    }
-    arms.push(arm);
-    hands.push(hand);
-  }
-
   // Rear proximity scanner and antenna communicate autonomous floor tracking.
   addMesh(chassis, new THREE.CylinderGeometry(0.18, 0.18, 0.08, 24), cyan, [0, 0.12, -0.88], [Math.PI / 2, 0, 0]);
   addMesh(chassis, new THREE.SphereGeometry(0.08, 16, 12), glow, [0, 0.12, -0.94]);
@@ -136,9 +136,9 @@ export function buildRover(scene: THREE.Scene, palette: Palette): CharacterRig {
     neck.rotation.set(0, 0, 0);
     head.rotation.set(0, 0, 0);
     cargo.rotation.set(0, 0, 0);
-    arms.forEach((arm) => arm.rotation.set(0, 0, 0));
-    hands.forEach((hand) => hand.rotation.set(0, 0, 0));
     cartons.forEach((box, i) => box.position.set(0, i * 0.38, 0));
+    tailLightMaterial.emissiveIntensity = 2.4;
+    tailLights.forEach((light) => light.scale.setScalar(1));
     eyes.scale.set(1, 1, 1);
   };
 
@@ -152,18 +152,14 @@ export function buildRover(scene: THREE.Scene, palette: Palette): CharacterRig {
     neck.rotation.y = Math.sin(beat * 0.7) * 0.5;
     head.rotation.z = Math.sin(beat * 2 + 0.6) * 0.14;
     head.rotation.x = -0.08 + swing * 0.1;
-    arms[0].rotation.z = 0.18 + Math.sin(beat * 1.4) * 0.52;
-    arms[1].rotation.z = -0.18 - Math.sin(beat * 1.4) * 0.52;
-    arms[0].rotation.x = Math.sin(beat * 2) * 0.22;
-    arms[1].rotation.x = -Math.sin(beat * 2) * 0.22;
-    hands[0].rotation.y = Math.sin(beat * 2.4) * 0.45;
-    hands[1].rotation.y = -Math.sin(beat * 2.4) * 0.45;
     cargo.rotation.y = beat * 0.35;
     cartons.forEach((box, i) => {
       box.position.y = i * 0.38 + Math.sin(beat * 2 - i * 0.8) * 0.05;
       box.position.x = Math.sin(beat - i * 0.5) * 0.05;
     });
     beacon.scale.setScalar(0.85 + bump * 0.4);
+    tailLightMaterial.emissiveIntensity = 1.8 + bump * 3.2;
+    tailLights.forEach((light) => light.scale.setScalar(0.96 + bump * 0.08));
     eyes.scale.y = 0.75 + Math.abs(Math.sin(beat * 0.5)) * 0.35;
   };
 
